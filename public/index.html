@@ -1,246 +1,578 @@
 <!DOCTYPE html>
 <html lang="da">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Takseringshjælp · Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Takseringshjælp — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg:#0b0f1a;--surface:#111827;--border:#1e2d45;--accent:#00d4ff;
-  --accent2:#00ff9d;--warn:#ff6b35;--text:#e8edf5;--muted:#5a6a82;--card-bg:#131c2e;
-}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:14px;}
-#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 30% 40%,#0d2540 0%,var(--bg) 60%);position:relative;overflow:hidden;}
-.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:48px 40px;width:100%;max-width:380px;box-shadow:0 0 60px rgba(0,212,255,0.07);}
-.login-logo{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.5px;margin-bottom:8px;color:var(--accent);}
-.login-sub{color:var(--muted);font-size:12px;margin-bottom:36px;letter-spacing:.05em;text-transform:uppercase;}
-.login-box label{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
-.login-box input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;outline:none;transition:border-color .2s;margin-bottom:20px;}
-.login-box input:focus{border-color:var(--accent);}
-.btn-primary{width:100%;background:var(--accent);color:#000;border:none;border-radius:8px;padding:13px;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s,transform .1s;}
-.btn-primary:hover{opacity:.85;}.btn-primary:active{transform:scale(.98);}
-.login-error{color:var(--warn);font-size:12px;margin-top:12px;text-align:center;min-height:18px;}
-#app{display:none;min-height:100vh;flex-direction:column;}#app.active{display:flex;}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:60px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;}
-.topbar-logo{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:var(--accent);}
-.topbar-right{display:flex;align-items:center;gap:20px;}
-.live-dot{width:8px;height:8px;background:var(--accent2);border-radius:50%;animation:pulse 2s infinite;}
-@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,255,157,.4);}50%{opacity:.7;box-shadow:0 0 0 6px rgba(0,255,157,0);}}
-.topbar-time{color:var(--muted);font-size:12px;}
-.logout-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 12px;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
-.logout-btn:hover{border-color:var(--warn);color:var(--warn);}
-.navtabs{display:flex;gap:2px;padding:12px 28px 0;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;}
-.navtab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;letter-spacing:.05em;padding:8px 16px 12px;cursor:pointer;transition:all .2s;white-space:nowrap;text-transform:uppercase;}
-.navtab:hover{color:var(--text);}.navtab.active{color:var(--accent);border-bottom-color:var(--accent);}
-.main{flex:1;padding:28px;max-width:1400px;width:100%;margin:0 auto;}
-.page{display:none;}.page.active{display:block;}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px;}
-.stat-card{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px 22px;position:relative;overflow:hidden;transition:border-color .2s;}
-.stat-card:hover{border-color:var(--accent);}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);}
-.stat-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
-.stat-value{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:var(--text);line-height:1;}
-.stat-value.accent{color:var(--accent);}.stat-value.green{color:var(--accent2);}.stat-value.warn{color:var(--warn);}
-.stat-sub{font-size:11px;color:var(--muted);margin-top:6px;}
-.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
-.section-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--text);}
-.refresh-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 12px;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
-.refresh-btn:hover{border-color:var(--accent);color:var(--accent);}
-.table-wrap{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
-table{width:100%;border-collapse:collapse;}
-thead tr{background:var(--surface);border-bottom:1px solid var(--border);}
-thead th{padding:12px 16px;text-align:left;font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
-tbody tr{border-bottom:1px solid var(--border);transition:background .15s;}
-tbody tr:last-child{border-bottom:none;}
-tbody tr:hover{background:rgba(0,212,255,.03);}
-tbody td{padding:12px 16px;font-size:13px;color:var(--text);}
-.td-mono{font-family:'DM Mono',monospace;}.td-muted{color:var(--muted);}
-.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;}
-.badge-green{background:rgba(0,255,157,.12);color:var(--accent2);}
-.badge-warn{background:rgba(255,107,53,.12);color:var(--warn);}
-.badge-blue{background:rgba(0,212,255,.12);color:var(--accent);}
-.chart-container{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:28px;}
-.chart-bars{display:flex;align-items:flex-end;gap:8px;height:160px;margin-top:16px;}
-.chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;gap:6px;}
-.chart-bar{width:100%;background:linear-gradient(180deg,var(--accent) 0%,rgba(0,212,255,.3) 100%);border-radius:4px 4px 0 0;min-height:4px;transition:opacity .2s;cursor:pointer;}
-.chart-bar:hover{opacity:.75;}
-.chart-label{font-size:9px;color:var(--muted);text-align:center;}
-.search-bar{background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;width:100%;max-width:320px;transition:border-color .2s;margin-bottom:16px;}
-.search-bar:focus{border-color:var(--accent);}
-.loading{text-align:center;padding:48px;color:var(--muted);font-size:13px;}
-.spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px;}
-@keyframes spin{to{transform:rotate(360deg);}}
-.pagination{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
-.page-btn{background:var(--card-bg);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 12px;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
-.page-btn:hover,.page-btn.active{border-color:var(--accent);color:var(--accent);}
-@media(max-width:600px){.main{padding:16px;}.topbar{padding:0 16px;}.navtabs{padding:12px 16px 0;}.stat-value{font-size:24px;}}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --bg:#0b0f1a; --surface:#111827; --border:#1e2d45; --accent:#00d4ff; --green:#00ff9d; --warn:#ff6b35; --text:#e8edf5; --muted:#5a6a82; --card:#131c2e; }
+body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; font-size:13px; }
+
+/* LOGIN */
+#login-screen { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:100; }
+.login-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px; width:320px; text-align:center; }
+.login-box h2 { font-family:'Syne',sans-serif; font-size:22px; color:var(--accent); margin-bottom:8px; }
+.login-box p { color:var(--muted); font-size:12px; margin-bottom:24px; }
+.login-box input { width:100%; background:#0d1520; border:1px solid var(--border); border-radius:8px; padding:10px 14px; color:var(--text); font-family:'DM Mono',monospace; font-size:13px; margin-bottom:12px; outline:none; }
+.login-box input:focus { border-color:var(--accent); }
+.login-box button { width:100%; background:var(--accent); color:#000; border:none; border-radius:8px; padding:10px; font-family:'Syne',sans-serif; font-size:14px; font-weight:800; cursor:pointer; }
+.login-box button:hover { opacity:.85; }
+.login-error { color:var(--warn); font-size:11px; margin-top:8px; display:none; }
+
+/* TOPBAR */
+.topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px; height:56px; display:flex; align-items:center; justify-content:space-between; }
+.logo { font-family:'Syne',sans-serif; font-size:17px; font-weight:800; color:var(--accent); }
+.topbar-right { display:flex; align-items:center; gap:16px; color:var(--muted); font-size:12px; }
+.dot { width:8px; height:8px; background:var(--green); border-radius:50%; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(0,255,157,.4)} 50%{box-shadow:0 0 0 6px rgba(0,255,157,0)} }
+.logout-btn { border:1px solid var(--border); border-radius:5px; padding:4px 10px; cursor:pointer; }
+.logout-btn:hover { border-color:var(--warn); color:var(--warn); }
+
+/* TABS */
+.tabs { background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px; display:flex; gap:2px; overflow-x:auto; }
+.tab { padding:12px 16px; font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; }
+.tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.tab:hover { color:var(--text); }
+
+/* VIEWS */
+.view { display:none; }
+.view.active { display:block; }
+.main { padding:24px; max-width:1400px; margin:0 auto; }
+
+/* MÅNEDSVÆLGER */
+.month-picker { display:flex; align-items:center; gap:10px; margin-bottom:24px; flex-wrap:wrap; }
+.year-btn { background:var(--card); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px 16px; font-family:'DM Mono',monospace; font-size:13px; cursor:pointer; }
+.year-btn.active { border-color:var(--accent); color:var(--accent); }
+.month-btn { background:var(--card); border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:6px 10px; font-size:11px; cursor:pointer; transition:all .15s; }
+.month-btn.active { background:var(--accent); color:#000; border-color:var(--accent); font-weight:bold; }
+.month-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+/* STAT KORT */
+.stats { display:grid; gap:14px; margin-bottom:20px; }
+.stat { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 20px; position:relative; overflow:hidden; }
+.stat::before { content:''; position:absolute; top:0;left:0;right:0;height:2px; }
+.stat.blue::before { background:linear-gradient(90deg,var(--accent),transparent); }
+.stat.green::before { background:linear-gradient(90deg,var(--green),transparent); }
+.stat-label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+.stat-val { font-family:'Syne',sans-serif; font-size:26px; font-weight:800; line-height:1; }
+.stat-val.blue { color:var(--accent); }
+.stat-val.green { color:var(--green); }
+.stat-sub { font-size:11px; color:var(--muted); margin-top:5px; }
+.stat-sub.up { color:var(--green); }
+
+/* GRID */
+.grid-2 { display:grid; grid-template-columns:1fr 1.6fr; gap:16px; margin-bottom:16px; }
+
+/* CARD */
+.card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
+.card-title { font-family:'Syne',sans-serif; font-size:14px; font-weight:700; margin-bottom:16px; }
+.card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+
+/* BARS */
+.bars { display:flex; align-items:flex-end; gap:5px; height:120px; }
+.bar-wrap { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:5px; height:100%; }
+.bar { width:100%; border-radius:3px 3px 0 0; }
+.bar-label { font-size:8px; color:var(--muted); }
+.bar-label.active { color:var(--accent); }
+
+/* P/L TABLE */
+.pl { width:100%; border-collapse:collapse; font-size:11px; }
+.pl tr:hover td { background:rgba(255,255,255,.02); }
+.pl td { padding:5px 4px; border-bottom:1px solid #0f1825; }
+.pl tr:last-child td { border-bottom:none; }
+.pl .pl-cat td { border-bottom:none; padding-bottom:2px; }
+.pl-name { color:#8a9ab8; padding-left:10px !important; }
+.pl-name-bold { color:#c8d5e8; font-weight:500; }
+.pl-amount { text-align:right; font-family:'DM Mono',monospace; }
+.pl-bar-td { width:80px; padding-right:8px !important; }
+.pl-bar-outer { background:#0d1520; border-radius:3px; height:4px; overflow:hidden; }
+.pl-bar-inner { height:100%; border-radius:3px; }
+.pl-pct { width:32px; text-align:right; font-size:10px; color:#3a4f6a; }
+.pl-divider td { border-top:1px solid #1e2d45 !important; border-bottom:1px solid #1e2d45 !important; padding-top:6px !important; padding-bottom:6px !important; }
+.pl-final td { border-top:2px solid #1e3a55 !important; padding-top:8px !important; }
+
+/* FAKTURAER / TABELLER */
+.tbl { width:100%; border-collapse:collapse; font-size:12px; }
+.tbl th { text-align:left; padding:10px 12px; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border); font-weight:400; }
+.tbl td { padding:10px 12px; border-bottom:1px solid #0f1825; }
+.tbl tr:hover td { background:rgba(255,255,255,.02); }
+.badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:10px; }
+.badge.paid { background:rgba(0,255,157,.1); color:var(--green); border:1px solid rgba(0,255,157,.2); }
+.badge.due { background:rgba(0,212,255,.1); color:var(--accent); border:1px solid rgba(0,212,255,.2); }
+.badge.overdue { background:rgba(255,107,53,.1); color:var(--warn); border:1px solid rgba(255,107,53,.2); }
+.badge.draft { background:rgba(90,106,130,.1); color:var(--muted); border:1px solid rgba(90,106,130,.2); }
+
+.search-bar { background:#0d1520; border:1px solid var(--border); border-radius:8px; padding:8px 14px; color:var(--text); font-family:'DM Mono',monospace; font-size:12px; width:100%; max-width:300px; outline:none; margin-bottom:16px; }
+.search-bar:focus { border-color:var(--accent); }
+
+.loading { text-align:center; padding:40px; color:var(--muted); }
+.error-msg { color:var(--warn); text-align:center; padding:20px; }
+
+/* PAGINATION */
+.pagination { display:flex; align-items:center; gap:8px; margin-top:16px; }
+.page-btn { background:var(--card); border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:5px 12px; font-size:11px; cursor:pointer; }
+.page-btn:hover, .page-btn.active { border-color:var(--accent); color:var(--accent); }
+.page-info { color:var(--muted); font-size:11px; }
 </style>
 </head>
 <body>
+
+<!-- LOGIN -->
 <div id="login-screen">
   <div class="login-box">
-    <div class="login-logo">Takseringshjælp</div>
-    <div class="login-sub">Economics Dashboard · Adgang kræver kode</div>
-    <label>Adgangskode</label>
-    <input type="password" id="pw-input" placeholder="Indtast adgangskode…" autocomplete="current-password" />
-    <button class="btn-primary" onclick="doLogin()">Log ind →</button>
-    <div class="login-error" id="login-error"></div>
+    <h2>⬡ Takseringshjælp</h2>
+    <p>Log ind for at se dashboard</p>
+    <input type="password" id="password-input" placeholder="Adgangskode" onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">Log ind</button>
+    <div class="login-error" id="login-error">Forkert adgangskode</div>
   </div>
 </div>
-<div id="app">
+
+<!-- APP -->
+<div id="app" style="display:none">
+
   <div class="topbar">
-    <div class="topbar-logo">⬡ Takseringshjælp</div>
+    <div class="logo">⬡ Takseringshjælp</div>
     <div class="topbar-right">
-      <div class="live-dot"></div>
-      <div class="topbar-time" id="clock"></div>
-      <button class="logout-btn" onclick="logout()">Log ud</button>
+      <div class="dot"></div>
+      <span id="clock"></span>
+      <span class="logout-btn" onclick="logout()">Log ud</span>
     </div>
   </div>
-  <div class="navtabs">
-    <button class="navtab active" onclick="showPage('overview',this)">Oversigt</button>
-    <button class="navtab" onclick="showPage('invoices',this)">Fakturaer</button>
-    <button class="navtab" onclick="showPage('drafts',this)">Kladder</button>
-    <button class="navtab" onclick="showPage('unpaid',this)">Ubetalte</button>
-    <button class="navtab" onclick="showPage('customers',this)">Kunder</button>
-    <button class="navtab" onclick="showPage('products',this)">Produkter</button>
-    <button class="navtab" onclick="showPage('orders',this)">Ordrer</button>
+
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('oversigt')">Oversigt</div>
+    <div class="tab" onclick="showTab('fakturaer')">Fakturaer</div>
+    <div class="tab" onclick="showTab('kladder')">Kladder</div>
+    <div class="tab" onclick="showTab('ubetalte')">Ubetalte</div>
+    <div class="tab" onclick="showTab('kunder')">Kunder</div>
+    <div class="tab" onclick="showTab('produkter')">Produkter</div>
+    <div class="tab" onclick="showTab('ordrer')">Ordrer</div>
   </div>
-  <div class="main">
-    <div class="page active" id="page-overview">
-      <div class="stats-grid" id="stats-grid"><div class="stat-card"><div class="stat-label">Henter data…</div><div class="stat-value accent">—</div></div></div>
-      <div class="chart-container">
-        <div class="section-header"><div class="section-title">Omsætning de seneste 12 måneder</div><button class="refresh-btn" onclick="loadRevenue()">↻ Opdater</button></div>
-        <div class="chart-bars" id="revenue-chart"><div class="loading"><div class="spinner"></div>Henter…</div></div>
+
+  <!-- OVERSIGT -->
+  <div id="view-oversigt" class="view active">
+    <div class="main">
+      <div class="month-picker" id="month-picker">
+        <button class="year-btn" onclick="setYear(2024)" id="yr-2024">2024</button>
+        <button class="year-btn" onclick="setYear(2025)" id="yr-2025">2025</button>
+        <button class="year-btn active" onclick="setYear(2026)" id="yr-2026">2026</button>
+        <div style="width:1px;height:24px;background:#1e2d45"></div>
+        <button class="month-btn" onclick="setMonth(1)"  id="mo-1">Jan</button>
+        <button class="month-btn" onclick="setMonth(2)"  id="mo-2">Feb</button>
+        <button class="month-btn" onclick="setMonth(3)"  id="mo-3">Mar</button>
+        <button class="month-btn" onclick="setMonth(4)"  id="mo-4">Apr</button>
+        <button class="month-btn" onclick="setMonth(5)"  id="mo-5">Maj</button>
+        <button class="month-btn" onclick="setMonth(6)"  id="mo-6">Jun</button>
+        <button class="month-btn" onclick="setMonth(7)"  id="mo-7">Jul</button>
+        <button class="month-btn" onclick="setMonth(8)"  id="mo-8">Aug</button>
+        <button class="month-btn" onclick="setMonth(9)"  id="mo-9">Sep</button>
+        <button class="month-btn" onclick="setMonth(10)" id="mo-10">Okt</button>
+        <button class="month-btn" onclick="setMonth(11)" id="mo-11">Nov</button>
+        <button class="month-btn" onclick="setMonth(12)" id="mo-12">Dec</button>
+      </div>
+
+      <div class="stats" style="grid-template-columns:repeat(2,1fr)">
+        <div class="stat blue">
+          <div class="stat-label" id="stat-label-month">Omsætning</div>
+          <div class="stat-val blue" id="stat-month">—</div>
+          <div class="stat-sub up" id="stat-month-sub"></div>
+        </div>
+        <div class="stat green">
+          <div class="stat-label" id="stat-label-ytd">Årets total</div>
+          <div class="stat-val green" id="stat-ytd">—</div>
+          <div class="stat-sub" id="stat-ytd-sub"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card">
+            <div class="card-title" id="rev-chart-title">Månedlig omsætning</div>
+            <div class="bars" id="rev-bars"><div class="loading">Henter...</div></div>
+          </div>
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div class="card-title" style="margin:0">Aktive kunder</div>
+              <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--green)" id="cust-count">—</div>
+            </div>
+            <svg id="cust-svg" viewBox="0 0 300 70" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:70px;overflow:visible">
+              <text x="150" y="40" font-size="10" fill="#3a4f6a" text-anchor="middle">Henter data...</text>
+            </svg>
+            <div style="display:flex;gap:16px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+              <div>
+                <div style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Ny denne måned</div>
+                <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--green)" id="cust-new">—</div>
+              </div>
+              <div>
+                <div style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:3px">Gns. omsætning/kunde</div>
+                <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--accent)" id="cust-avg">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title" style="margin:0">Resultatopgørelse</div>
+            <div style="font-size:10px;color:var(--muted);background:#0d1520;border:1px solid var(--border);border-radius:20px;padding:3px 10px;letter-spacing:.08em;text-transform:uppercase" id="pl-period">—</div>
+          </div>
+          <div id="pl-content"><div class="loading">Henter...</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:0">
+        <div class="card-header">
+          <div class="card-title" style="margin:0">Likviditet</div>
+          <div style="font-size:11px;color:var(--muted)">Akkumuleret netto cashflow</div>
+        </div>
+        <svg id="liq-svg" viewBox="0 0 700 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100px;overflow:visible;margin-top:12px">
+          <text x="350" y="50" font-size="10" fill="#3a4f6a" text-anchor="middle">Henter data...</text>
+        </svg>
       </div>
     </div>
-    <div class="page" id="page-invoices">
-      <div class="section-header"><div class="section-title">Bogførte fakturaer</div><button class="refresh-btn" onclick="loadInvoices()">↻ Opdater</button></div>
-      <input class="search-bar" placeholder="Søg faktura, kunde…" oninput="filterTable('inv-table',this.value)" />
-      <div class="table-wrap" id="inv-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
-      <div class="pagination" id="inv-pages"></div>
-    </div>
-    <div class="page" id="page-drafts">
-      <div class="section-header"><div class="section-title">Fakturakladder</div><button class="refresh-btn" onclick="loadDrafts()">↻ Opdater</button></div>
-      <input class="search-bar" placeholder="Søg kladde…" oninput="filterTable('draft-table',this.value)" />
-      <div class="table-wrap" id="draft-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
-    </div>
-    <div class="page" id="page-unpaid">
-      <div class="section-header"><div class="section-title">Ubetalte fakturaer</div><button class="refresh-btn" onclick="loadUnpaid()">↻ Opdater</button></div>
-      <div class="table-wrap" id="unpaid-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
-    </div>
-    <div class="page" id="page-customers">
-      <div class="section-header"><div class="section-title">Kunder</div><button class="refresh-btn" onclick="loadCustomers()">↻ Opdater</button></div>
-      <input class="search-bar" placeholder="Søg kundenavn…" oninput="filterTable('cust-table',this.value)" />
-      <div class="table-wrap" id="cust-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
-      <div class="pagination" id="cust-pages"></div>
-    </div>
-    <div class="page" id="page-products">
-      <div class="section-header"><div class="section-title">Produkter</div><button class="refresh-btn" onclick="loadProducts()">↻ Opdater</button></div>
-      <input class="search-bar" placeholder="Søg produkt…" oninput="filterTable('prod-table',this.value)" />
-      <div class="table-wrap" id="prod-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
-    </div>
-    <div class="page" id="page-orders">
-      <div class="section-header"><div class="section-title">Ordrer</div><button class="refresh-btn" onclick="loadOrders()">↻ Opdater</button></div>
-      <div class="table-wrap" id="orders-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- FAKTURAER -->
+  <div id="view-fakturaer" class="view">
+    <div class="main">
+      <input class="search-bar" placeholder="Søg fakturaer..." oninput="filterTable('fakturaer-tbl', this.value)">
+      <div class="card"><div id="fakturaer-content"><div class="loading">Henter fakturaer...</div></div></div>
+      <div class="pagination" id="pag-fakturaer"></div>
     </div>
   </div>
+
+  <!-- KLADDER -->
+  <div id="view-kladder" class="view">
+    <div class="main">
+      <input class="search-bar" placeholder="Søg kladder..." oninput="filterTable('kladder-tbl', this.value)">
+      <div class="card"><div id="kladder-content"><div class="loading">Henter kladder...</div></div></div>
+    </div>
+  </div>
+
+  <!-- UBETALTE -->
+  <div id="view-ubetalte" class="view">
+    <div class="main">
+      <input class="search-bar" placeholder="Søg ubetalte..." oninput="filterTable('ubetalte-tbl', this.value)">
+      <div class="card"><div id="ubetalte-content"><div class="loading">Henter ubetalte fakturaer...</div></div></div>
+    </div>
+  </div>
+
+  <!-- KUNDER -->
+  <div id="view-kunder" class="view">
+    <div class="main">
+      <input class="search-bar" placeholder="Søg kunder..." oninput="filterTable('kunder-tbl', this.value)">
+      <div class="card"><div id="kunder-content"><div class="loading">Henter kunder...</div></div></div>
+      <div class="pagination" id="pag-kunder"></div>
+    </div>
+  </div>
+
+  <!-- PRODUKTER -->
+  <div id="view-produkter" class="view">
+    <div class="main">
+      <input class="search-bar" placeholder="Søg produkter..." oninput="filterTable('produkter-tbl', this.value)">
+      <div class="card"><div id="produkter-content"><div class="loading">Henter produkter...</div></div></div>
+    </div>
+  </div>
+
+  <!-- ORDRER -->
+  <div id="view-ordrer" class="view">
+    <div class="main">
+      <input class="search-bar" placeholder="Søg ordrer..." oninput="filterTable('ordrer-tbl', this.value)">
+      <div class="card"><div id="ordrer-content"><div class="loading">Henter ordrer...</div></div></div>
+    </div>
+  </div>
+
 </div>
+
 <script>
-const BASE='';
-let token=null,invPage=0,custPage=0;
-function updateClock(){const n=new Date();document.getElementById('clock').textContent=n.toLocaleDateString('da-DK')+' '+n.toTimeString().slice(0,5);}
-setInterval(updateClock,1000);updateClock();
-document.getElementById('pw-input').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-async function doLogin(){
-  const pw=document.getElementById('pw-input').value;
-  const err=document.getElementById('login-error');err.textContent='';
-  try{const r=await fetch(`${BASE}/api/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
-  const d=await r.json();
-  if(d.success){token=d.token;document.getElementById('login-screen').style.display='none';document.getElementById('app').classList.add('active');loadAll();}
-  else err.textContent=d.error||'Forkert adgangskode';}
-  catch(e){err.textContent='Kunne ikke forbinde til server';}
+let selectedYear  = new Date().getFullYear();
+let selectedMonth = new Date().getMonth() + 1;
+let revenueData   = [];
+
+async function doLogin() {
+  const pw = document.getElementById('password-input').value;
+  const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password:pw}) });
+  if (res.ok) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    initDashboard();
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+  }
 }
-function logout(){token=null;document.getElementById('login-screen').style.display='flex';document.getElementById('app').classList.remove('active');document.getElementById('pw-input').value='';}
-async function api(path){const r=await fetch(`${BASE}${path}`,{headers:{'x-dashboard-token':token}});if(!r.ok)throw new Error(`API ${r.status}`);return r.json();}
-const pageLoaders={invoices:()=>loadInvoices(),drafts:()=>loadDrafts(),unpaid:()=>loadUnpaid(),customers:()=>loadCustomers(),products:()=>loadProducts(),orders:()=>loadOrders()};
-const loadedPages=new Set(['overview']);
-function showPage(name,btn){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.navtab').forEach(b=>b.classList.remove('active'));
-  document.getElementById(`page-${name}`).classList.add('active');btn.classList.add('active');
-  if(!loadedPages.has(name)){loadedPages.add(name);pageLoaders[name]?.();}
+
+function logout() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('password-input').value = '';
 }
-function loadAll(){loadSummary();loadRevenue();}
-async function loadSummary(){
-  try{const d=await api('/api/summary');
-  document.getElementById('stats-grid').innerHTML=`
-    <div class="stat-card"><div class="stat-label">Bogførte fakturaer</div><div class="stat-value accent">${fmt(d.bookedInvoices)}</div><div class="stat-sub">Total antal</div></div>
-    <div class="stat-card"><div class="stat-label">Fakturakladder</div><div class="stat-value">${fmt(d.draftInvoices)}</div><div class="stat-sub">Afventer bogføring</div></div>
-    <div class="stat-card"><div class="stat-label">Kunder</div><div class="stat-value green">${fmt(d.customers)}</div><div class="stat-sub">Registrerede</div></div>
-    <div class="stat-card"><div class="stat-label">Produkter</div><div class="stat-value">${fmt(d.products)}</div><div class="stat-sub">I kataloget</div></div>`;}
-  catch(e){document.getElementById('stats-grid').innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleDateString('da-DK') + ' · ' + now.toLocaleTimeString('da-DK', {hour:'2-digit', minute:'2-digit'});
 }
-async function loadRevenue(){
-  const el=document.getElementById('revenue-chart');
-  el.innerHTML='<div class="loading"><div class="spinner"></div>Henter…</div>';
-  try{const d=await api('/api/revenue');const months=d.monthly||[];
-  if(!months.length){el.innerHTML='<div class="loading">Ingen data</div>';return;}
-  const max=Math.max(...months.map(m=>m[1]));
-  el.innerHTML=months.map(([m,v])=>`<div class="chart-bar-wrap" title="${m}: ${fmtCurrency(v)}"><div class="chart-bar" style="height:${Math.round((v/max)*100)}%"></div><div class="chart-label">${m.slice(5)}</div></div>`).join('');}
-  catch(e){el.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+setInterval(updateClock, 1000);
+updateClock();
+
+const tabNames = ['oversigt','fakturaer','kladder','ubetalte','kunder','produkter','ordrer'];
+function showTab(name) {
+  tabNames.forEach(t => {
+    document.getElementById('view-' + t).classList.toggle('active', t === name);
+  });
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    el.classList.toggle('active', tabNames[i] === name);
+  });
+  if (name === 'fakturaer' && !document.getElementById('fakturaer-content').dataset.loaded) loadFakturaer();
+  if (name === 'kladder'   && !document.getElementById('kladder-content').dataset.loaded)   loadKladder();
+  if (name === 'ubetalte'  && !document.getElementById('ubetalte-content').dataset.loaded)  loadUbetalte();
+  if (name === 'kunder'    && !document.getElementById('kunder-content').dataset.loaded)    loadKunder();
+  if (name === 'produkter' && !document.getElementById('produkter-content').dataset.loaded) loadProdukter();
+  if (name === 'ordrer'    && !document.getElementById('ordrer-content').dataset.loaded)    loadOrdrer();
 }
-async function loadInvoices(page=0){
-  invPage=page;const wrap=document.getElementById('inv-table-wrap');
-  wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try{const d=await api(`/api/invoices/booked?page=${page}`);const items=d.collection||[];const total=d.pagination?.results||0;
-  wrap.innerHTML=items.length?`<table id="inv-table"><thead><tr><th>Faktura #</th><th>Kunde</th><th>Dato</th><th>Forfalder</th><th>Beløb</th><th>Restance</th><th>Status</th></tr></thead><tbody>${items.map(inv=>{const overdue=inv.dueDate&&new Date(inv.dueDate)<new Date()&&(inv.remainder||0)>0;const badge=overdue?'<span class="badge badge-warn">Forfalden</span>':(inv.remainder>0)?'<span class="badge badge-blue">Udestående</span>':'<span class="badge badge-green">Betalt</span>';return`<tr><td class="td-mono">${inv.bookedInvoiceNumber||'—'}</td><td>${inv.customer?.name||'—'}</td><td class="td-muted">${inv.date||'—'}</td><td class="td-muted">${inv.dueDate||'—'}</td><td class="td-mono">${fmtCurrency(inv.grossAmount)}</td><td class="td-mono">${fmtCurrency(inv.remainder)}</td><td>${badge}</td></tr>`;}).join('')}</tbody></table>`:'<div class="loading">Ingen fakturaer</div>';
-  renderPages('inv-pages',page,total,50,loadInvoices);}
-  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+
+function setYear(y) {
+  selectedYear = y;
+  document.querySelectorAll('.year-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('yr-' + y).classList.add('active');
+  loadOversigt();
 }
-async function loadDrafts(){
-  const wrap=document.getElementById('draft-table-wrap');wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try{const d=await api('/api/invoices/drafts');const items=d.collection||[];
-  wrap.innerHTML=items.length?`<table id="draft-table"><thead><tr><th>Kladde #</th><th>Kunde</th><th>Dato</th><th>Beløb</th></tr></thead><tbody>${items.map(inv=>`<tr><td class="td-mono">${inv.draftInvoiceNumber||'—'}</td><td>${inv.customer?.name||'—'}</td><td class="td-muted">${inv.date||'—'}</td><td class="td-mono">${fmtCurrency(inv.grossAmount)}</td></tr>`).join('')}</tbody></table>`:'<div class="loading">Ingen kladder</div>';}
-  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+function setMonth(m) {
+  selectedMonth = m;
+  document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('mo-' + m).classList.add('active');
+  loadOversigt();
 }
-async function loadUnpaid(){
-  const wrap=document.getElementById('unpaid-table-wrap');wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try{const d=await api('/api/invoices/unpaid');const items=(d.collection||[]).filter(i=>(i.remainder||0)>0);
-  wrap.innerHTML=items.length?`<table><thead><tr><th>Faktura #</th><th>Kunde</th><th>Forfalder</th><th>Restance</th><th>Status</th></tr></thead><tbody>${items.map(inv=>{const overdue=inv.dueDate&&new Date(inv.dueDate)<new Date();return`<tr><td class="td-mono">${inv.bookedInvoiceNumber||'—'}</td><td>${inv.customer?.name||'—'}</td><td class="td-muted">${inv.dueDate||'—'}</td><td class="td-mono" style="color:var(--warn)">${fmtCurrency(inv.remainder)}</td><td>${overdue?'<span class="badge badge-warn">Forfalden</span>':'<span class="badge badge-blue">Udestående</span>'}</td></tr>`;}).join('')}</tbody></table>`:'<div class="loading" style="color:var(--accent2)">✓ Ingen ubetalte fakturaer</div>';}
-  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+
+document.getElementById('mo-' + selectedMonth).classList.add('active');
+
+function fmt(n) {
+  if (n == null) return '—';
+  return Math.round(n).toLocaleString('da-DK') + ' kr.';
 }
-async function loadCustomers(page=0){
-  custPage=page;const wrap=document.getElementById('cust-table-wrap');wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try{const d=await api(`/api/customers?page=${page}`);const items=d.collection||[];const total=d.pagination?.results||0;
-  wrap.innerHTML=items.length?`<table id="cust-table"><thead><tr><th>Kundnr.</th><th>Navn</th><th>Email</th><th>Telefon</th><th>Saldo</th></tr></thead><tbody>${items.map(c=>`<tr><td class="td-mono">${c.customerNumber||'—'}</td><td>${c.name||'—'}</td><td class="td-muted">${c.email||'—'}</td><td class="td-muted">${c.telephoneAndFaxNumber||'—'}</td><td class="td-mono">${fmtCurrency(c.balance)}</td></tr>`).join('')}</tbody></table>`:'<div class="loading">Ingen kunder</div>';
-  renderPages('cust-pages',page,total,50,loadCustomers);}
-  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+function fmtShort(n) {
+  if (n == null || n === 0) return '0';
+  if (Math.abs(n) >= 1000000) return (n/1000000).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1000)    return Math.round(n/1000) + 'k';
+  return Math.round(n).toString();
 }
-async function loadProducts(){
-  const wrap=document.getElementById('prod-table-wrap');wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try{const d=await api('/api/products');const items=d.collection||[];
-  wrap.innerHTML=items.length?`<table id="prod-table"><thead><tr><th>Produktnr.</th><th>Navn</th><th>Enhed</th><th>Pris ex. moms</th><th>Lager</th></tr></thead><tbody>${items.map(p=>`<tr><td class="td-mono">${p.productNumber||'—'}</td><td>${p.name||'—'}</td><td class="td-muted">${p.unit?.name||'—'}</td><td class="td-mono">${fmtCurrency(p.salesPrice)}</td><td class="td-mono">${p.inventory!=null?p.inventory:'—'}</td></tr>`).join('')}</tbody></table>`:'<div class="loading">Ingen produkter</div>';}
-  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+const monthNames = ['','Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+
+function filterTable(tblId, query) {
+  const tbl = document.getElementById(tblId);
+  if (!tbl) return;
+  tbl.querySelectorAll('tbody tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(query.toLowerCase()) ? '' : 'none';
+  });
 }
-async function loadOrders(){
-  const wrap=document.getElementById('orders-table-wrap');wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
-  try{const d=await api('/api/orders');const items=d.collection||[];
-  wrap.innerHTML=items.length?`<table><thead><tr><th>Ordre #</th><th>Kunde</th><th>Dato</th><th>Beløb</th></tr></thead><tbody>${items.map(o=>`<tr><td class="td-mono">${o.orderNumber||'—'}</td><td>${o.customer?.name||'—'}</td><td class="td-muted">${o.date||'—'}</td><td class="td-mono">${fmtCurrency(o.grossAmount)}</td></tr>`).join('')}</tbody></table>`:'<div class="loading">Ingen ordrer</div>';}
-  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+
+function initDashboard() { loadOversigt(); }
+
+async function loadOversigt() {
+  try {
+    const res = await fetch(`/api/revenue?year=${selectedYear}`);
+    const data = await res.json();
+    revenueData = data.months || [];
+    renderRevenueChart();
+    renderStats();
+    renderPL();
+    renderLiquidityChart();
+    renderCustomerChart();
+  } catch(e) { console.error(e); }
 }
-function fmt(n){return(n||0).toLocaleString('da-DK');}
-function fmtCurrency(n){if(n==null)return'—';return n.toLocaleString('da-DK',{minimumFractionDigits:2,maximumFractionDigits:2})+' kr.';}
-function filterTable(tableId,q){const t=document.getElementById(tableId);if(!t)return;t.querySelectorAll('tbody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
-function renderPages(elId,currentPage,total,perPage,loader){
-  const pages=Math.ceil(total/perPage);if(pages<=1){document.getElementById(elId).innerHTML='';return;}
-  let html='';
-  if(currentPage>0)html+=`<button class="page-btn" onclick="${loader.name}(${currentPage-1})">← Forrige</button>`;
-  html+=`<span class="page-btn active">${currentPage+1} / ${pages}</span>`;
-  if(currentPage<pages-1)html+=`<button class="page-btn" onclick="${loader.name}(${currentPage+1})">Næste →</button>`;
-  document.getElementById(elId).innerHTML=html;
+
+function renderStats() {
+  const monthData = revenueData.find(m => m.month === selectedMonth) || {};
+  const ytd = revenueData.filter(m => m.month <= selectedMonth).reduce((s,m) => s + (m.revenue||0), 0);
+  const prev = (revenueData.find(m => m.month === selectedMonth - 1) || {}).revenue || 0;
+  const cur = monthData.revenue || 0;
+  document.getElementById('stat-label-month').textContent = `Omsætning ${monthNames[selectedMonth]} ${selectedYear}`;
+  document.getElementById('stat-month').textContent = fmt(cur);
+  if (prev > 0) {
+    const pct = Math.round(((cur - prev) / prev) * 100);
+    const sub = document.getElementById('stat-month-sub');
+    sub.textContent = (pct >= 0 ? '↑ ' : '↓ ') + Math.abs(pct) + '% vs. ' + monthNames[selectedMonth-1];
+    sub.className = 'stat-sub ' + (pct >= 0 ? 'up' : 'down');
+  }
+  document.getElementById('stat-label-ytd').textContent = `Årets total ${selectedYear}`;
+  document.getElementById('stat-ytd').textContent = fmt(ytd);
+  document.getElementById('stat-ytd-sub').textContent = `${monthNames[1]}–${monthNames[selectedMonth]} bogført`;
+}
+
+function renderRevenueChart() {
+  const max = Math.max(...revenueData.map(m => m.revenue || 0), 1);
+  document.getElementById('rev-chart-title').textContent = `Månedlig omsætning ${selectedYear}`;
+  document.getElementById('rev-bars').innerHTML = revenueData.map(m => {
+    const h = Math.max(((m.revenue || 0) / max) * 100, 2);
+    const isActive = m.month === selectedMonth;
+    const color = isActive ? 'linear-gradient(180deg,#00ff9d,rgba(0,255,157,.2))' : (m.revenue ? 'linear-gradient(180deg,#00d4ff,rgba(0,212,255,.2))' : 'rgba(30,45,69,.4)');
+    return `<div class="bar-wrap"><div class="bar" style="height:${h}%;background:${color}"></div><div class="bar-label ${isActive?'active':''}">${monthNames[m.month]}</div></div>`;
+  }).join('');
+}
+
+function renderCustomerChart() {
+  const cur = revenueData.find(m => m.month === selectedMonth) || {};
+  document.getElementById('cust-count').textContent = (cur.customers || '—') + ' kunder';
+  document.getElementById('cust-new').textContent = cur.newCustomers != null ? '+' + cur.newCustomers : '—';
+  document.getElementById('cust-avg').textContent = cur.customers && cur.revenue ? fmtShort(cur.revenue / cur.customers) + ' kr.' : '—';
+  const known = revenueData.filter(m => m.customers != null && m.month <= selectedMonth);
+  if (known.length < 2) { document.getElementById('cust-svg').innerHTML = '<text x="150" y="40" font-size="10" fill="#3a4f6a" text-anchor="middle">Ikke nok data endnu</text>'; return; }
+  const maxC = Math.max(...known.map(m => m.customers), 1);
+  const xStep = 300 / 11;
+  const pts = revenueData.map((m, i) => ({ x: i * xStep + xStep/2, y: m.customers != null ? 60 - (m.customers/maxC)*55 : null, m }));
+  const kp = pts.filter(p => p.y != null && p.m.month <= selectedMonth);
+  const lk = kp[kp.length-1];
+  let svg = `<defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00ff9d" stop-opacity=".2"/><stop offset="100%" stop-color="#00ff9d" stop-opacity="0"/></linearGradient></defs>`;
+  [0,1,2,3].forEach(i => { svg += `<line x1="0" y1="${5+i*18}" x2="300" y2="${5+i*18}" stroke="#1e2d45" stroke-width=".5"/>`; });
+  if (kp.length > 1) { svg += `<polygon points="${kp.map(p=>`${p.x},${p.y}`).join(' ')} ${lk.x},70 ${kp[0].x},70" fill="url(#cg)"/>`; }
+  if (lk) svg += `<line x1="${lk.x}" y1="${lk.y}" x2="300" y2="${lk.y}" stroke="#00ff9d" stroke-width="1.5" stroke-dasharray="4,3" opacity=".25"/>`;
+  if (kp.length > 1) svg += `<polyline points="${kp.map(p=>`${p.x},${p.y}`).join(' ')}" fill="none" stroke="#00ff9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+  kp.forEach(p => {
+    const isA = p.m.month === selectedMonth;
+    svg += isA ? `<circle cx="${p.x}" cy="${p.y}" r="4" fill="#00ff9d" stroke="#0b0f1a" stroke-width="1.5"/>` : `<circle cx="${p.x}" cy="${p.y}" r="3" fill="#0b0f1a" stroke="#00ff9d" stroke-width="1.5"/>`;
+  });
+  revenueData.forEach((m, i) => {
+    const x = i * xStep + xStep/2;
+    const col = m.month === selectedMonth ? '#00d4ff' : (m.month <= selectedMonth ? '#5a6a82' : '#2a3a4a');
+    svg += `<text x="${x}" y="82" font-size="7" fill="${col}" text-anchor="middle">${monthNames[m.month]}</text>`;
+  });
+  document.getElementById('cust-svg').innerHTML = svg;
+}
+
+function renderPL() {
+  const cur = revenueData.find(m => m.month === selectedMonth) || {};
+  document.getElementById('pl-period').textContent = `${monthNames[selectedMonth]} ${selectedYear}`;
+  const rev = cur.revenue || 0;
+  const cogs = cur.cogs || 0;
+  const gross = rev - cogs;
+  const opex = cur.opex || 0;
+  const ebitda = gross - opex;
+  const depr = cur.depreciation || 0;
+  const interest = cur.interest || 0;
+  const net = ebitda - depr - interest;
+  const gp = rev ? Math.round(gross/rev*100) : 0;
+  const ep = rev ? Math.round(ebitda/rev*100) : 0;
+  const np = rev ? Math.round(net/rev*100) : 0;
+  function bar(pct, color) { return `<td class="pl-bar-td"><div class="pl-bar-outer"><div class="pl-bar-inner" style="width:${Math.min(Math.abs(pct),100)}%;background:${color}"></div></div></td>`; }
+  function row(name, val, pct, color) {
+    const bc = val < 0 ? 'linear-gradient(90deg,#ff6b35,rgba(255,107,53,.4))' : `linear-gradient(90deg,${color},transparent)`;
+    return `<tr><td class="pl-name">${name}</td>${bar(pct,bc)}<td class="pl-pct" style="color:${val<0?'#ff6b35':color}">${pct}%</td><td class="pl-amount" style="color:${val<0?'#ff6b35':color}">${fmt(val)}</td></tr>`;
+  }
+  document.getElementById('pl-content').innerHTML = `<table class="pl">
+    <tr class="pl-cat"><td colspan="4" style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#3a4f6a;padding-top:4px;padding-bottom:4px;border-bottom:none">Omsætning</td></tr>
+    ${row('Nettoomsætning', rev, 100, '#00d4ff')}
+    <tr class="pl-cat"><td colspan="4" style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#3a4f6a;padding-top:10px;padding-bottom:4px;border-bottom:none">Direkte omkostninger</td></tr>
+    ${row('Vareforbrug & underleverandører', -cogs, -Math.round(cogs/rev*100||0), '#ff6b35')}
+    <tr class="pl-divider"><td class="pl-name-bold">Bruttoresultat</td><td class="pl-bar-td"></td><td class="pl-pct" style="color:#00d4ff;font-size:11px">${gp}%</td><td class="pl-amount" style="color:#00d4ff;font-family:'Syne',sans-serif;font-size:14px;font-weight:800">${fmt(gross)}</td></tr>
+    <tr class="pl-cat"><td colspan="4" style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#3a4f6a;padding-top:10px;padding-bottom:4px;border-bottom:none">Driftsomkostninger</td></tr>
+    ${row('Løn & honorarer', -(cur.salaries||0), -Math.round((cur.salaries||0)/rev*100||0), '#ff6b35')}
+    ${row('Husleje & kontor', -(cur.rent||0), -Math.round((cur.rent||0)/rev*100||0), '#ff6b35')}
+    ${row('Øvrige driftsomk.', -(cur.otherOpex||0), -Math.round((cur.otherOpex||0)/rev*100||0), '#ff6b35')}
+    <tr class="pl-divider"><td class="pl-name-bold">EBITDA</td><td class="pl-bar-td"></td><td class="pl-pct" style="color:#00d4ff;font-size:11px">${ep}%</td><td class="pl-amount" style="color:#00d4ff;font-family:'Syne',sans-serif;font-size:14px;font-weight:800">${fmt(ebitda)}</td></tr>
+    <tr class="pl-cat"><td colspan="4" style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#3a4f6a;padding-top:10px;padding-bottom:4px;border-bottom:none">Finansielle poster</td></tr>
+    ${row('Afskrivninger', -depr, -Math.round(depr/rev*100||0), '#5a6a82')}
+    ${row('Renteomk.', -interest, -Math.round(interest/rev*100||0), '#5a6a82')}
+    <tr class="pl-final"><td style="font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#e8edf5">Resultat før skat</td><td class="pl-bar-td"></td><td class="pl-pct" style="color:#00ff9d;font-size:11px;font-weight:700">${np}%</td><td class="pl-amount" style="color:#00ff9d;font-family:'Syne',sans-serif;font-size:15px;font-weight:800;text-shadow:0 0 20px rgba(0,255,157,.4)">${fmt(net)}</td></tr>
+  </table>`;
+}
+
+function renderLiquidityChart() {
+  const known = revenueData.filter(m => m.month <= selectedMonth && m.cashflow != null);
+  if (known.length === 0) { document.getElementById('liq-svg').innerHTML = '<text x="350" y="50" font-size="10" fill="#3a4f6a" text-anchor="middle">Ingen likviditetsdata</text>'; return; }
+  let acc = 0;
+  const points = revenueData.map((m, i) => {
+    const x = 40 + i * 60;
+    if (m.month <= selectedMonth && m.cashflow != null) { acc += m.cashflow; return { x, val: acc, known: true, m }; }
+    return { x, val: acc, known: false, m };
+  });
+  const maxVal = Math.max(...points.map(p => p.val), 1);
+  function toY(v) { return 74 - (v / maxVal) * 64; }
+  const kp = points.filter(p => p.known);
+  const lk = kp[kp.length-1];
+  let svg = `<defs><linearGradient id="liqG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00ff9d" stop-opacity=".25"/><stop offset="100%" stop-color="#00ff9d" stop-opacity="0"/></linearGradient></defs>`;
+  [10,42,74].forEach(y => { svg += `<line x1="0" y1="${y}" x2="700" y2="${y}" stroke="#1e2d45" stroke-width=".5"/>`; });
+  svg += `<text x="0" y="9" font-size="8" fill="#3a4f6a">${fmtShort(maxVal)}</text>`;
+  svg += `<text x="0" y="41" font-size="8" fill="#3a4f6a">${fmtShort(maxVal/2)}</text>`;
+  svg += `<text x="0" y="73" font-size="8" fill="#3a4f6a">0</text>`;
+  if (kp.length > 0) { svg += `<polygon points="${kp.map(p=>`${p.x},${toY(p.val)}`).join(' ')} ${lk.x},74 ${kp[0].x},74" fill="url(#liqG)"/>`; }
+  if (lk) svg += `<line x1="${lk.x}" y1="${toY(lk.val)}" x2="700" y2="${toY(lk.val)}" stroke="#00ff9d" stroke-width="1.5" stroke-dasharray="5,4" opacity=".3"/>`;
+  if (kp.length > 1) svg += `<polyline points="${kp.map(p=>`${p.x},${toY(p.val)}`).join(' ')}" fill="none" stroke="#00ff9d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+  kp.forEach(p => {
+    const y = toY(p.val); const isA = p.m.month === selectedMonth;
+    svg += isA ? `<circle cx="${p.x}" cy="${y}" r="5" fill="#00ff9d" stroke="#0b0f1a" stroke-width="1.5"/>` : `<circle cx="${p.x}" cy="${y}" r="4" fill="#0b0f1a" stroke="#00ff9d" stroke-width="2"/>`;
+    svg += `<text x="${p.x}" y="${y-8}" font-size="${isA?9:8}" fill="${isA?'#00ff9d':'#5a6a82'}" text-anchor="middle" ${isA?'font-weight="bold"':''}>${fmtShort(p.val)}</text>`;
+  });
+  points.forEach(p => {
+    const col = p.m.month === selectedMonth ? '#00d4ff' : (p.known ? '#5a6a82' : '#2a3a4a');
+    svg += `<text x="${p.x}" y="90" font-size="${p.m.month===selectedMonth?8.5:8}" fill="${col}" text-anchor="middle">${monthNames[p.m.month]}</text>`;
+  });
+  document.getElementById('liq-svg').innerHTML = svg;
+}
+
+let fakPage = 1;
+async function loadFakturaer(page=1) {
+  fakPage = page;
+  const res = await fetch(`/api/invoices/booked?page=${page}`);
+  const data = await res.json();
+  document.getElementById('fakturaer-content').dataset.loaded = '1';
+  renderInvoiceTable('fakturaer-content', 'fakturaer-tbl', data.invoices || []);
+  renderPagination('pag-fakturaer', data.pageCount || 1, page, loadFakturaer);
+}
+async function loadKladder() {
+  const res = await fetch('/api/invoices/drafts');
+  const data = await res.json();
+  document.getElementById('kladder-content').dataset.loaded = '1';
+  renderInvoiceTable('kladder-content', 'kladder-tbl', data.invoices || [], true);
+}
+async function loadUbetalte() {
+  const res = await fetch('/api/invoices/unpaid');
+  const data = await res.json();
+  document.getElementById('ubetalte-content').dataset.loaded = '1';
+  renderInvoiceTable('ubetalte-content', 'ubetalte-tbl', data.invoices || []);
+}
+function renderInvoiceTable(containerId, tblId, invoices, isDraft=false) {
+  if (!invoices.length) { document.getElementById(containerId).innerHTML = '<div class="loading">Ingen data fundet</div>'; return; }
+  const rows = invoices.map(inv => {
+    const status = isDraft ? 'draft' : (inv.remainder > 0 ? (new Date(inv.dueDate) < new Date() ? 'overdue' : 'due') : 'paid');
+    const labels = { paid:'Betalt', due:'Udestående', overdue:'Forfalden', draft:'Kladde' };
+    return `<tr><td>${inv.bookedInvoiceNumber || inv.draftInvoiceNumber || '—'}</td><td>${inv.customer?.name || '—'}</td><td>${inv.date ? new Date(inv.date).toLocaleDateString('da-DK') : '—'}</td><td>${inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('da-DK') : '—'}</td><td style="text-align:right">${fmt(inv.grossAmount)}</td><td style="text-align:right">${inv.remainder != null ? fmt(inv.remainder) : '—'}</td><td><span class="badge ${status}">${labels[status]}</span></td></tr>`;
+  }).join('');
+  document.getElementById(containerId).innerHTML = `<table class="tbl" id="${tblId}"><thead><tr><th>Nummer</th><th>Kunde</th><th>Dato</th><th>Forfald</th><th style="text-align:right">Beløb</th><th style="text-align:right">Udestående</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+let kundePage = 1;
+async function loadKunder(page=1) {
+  kundePage = page;
+  const res = await fetch(`/api/customers?page=${page}`);
+  const data = await res.json();
+  document.getElementById('kunder-content').dataset.loaded = '1';
+  const rows = (data.customers || []).map(c => `<tr><td>${c.customerNumber||'—'}</td><td>${c.name||'—'}</td><td>${c.email||'—'}</td><td>${c.telephoneAndFaxNumber||'—'}</td><td>${c.city||'—'}</td><td style="text-align:right">${fmt(c.balance)}</td></tr>`).join('');
+  document.getElementById('kunder-content').innerHTML = `<table class="tbl" id="kunder-tbl"><thead><tr><th>Nr.</th><th>Navn</th><th>Email</th><th>Telefon</th><th>By</th><th style="text-align:right">Saldo</th></tr></thead><tbody>${rows}</tbody></table>`;
+  renderPagination('pag-kunder', data.pageCount || 1, page, loadKunder);
+}
+async function loadProdukter() {
+  const res = await fetch('/api/products');
+  const data = await res.json();
+  document.getElementById('produkter-content').dataset.loaded = '1';
+  const rows = (data.products || []).map(p => `<tr><td>${p.productNumber||'—'}</td><td>${p.name||'—'}</td><td>${p.description||'—'}</td><td style="text-align:right">${fmt(p.salesPrice)}</td></tr>`).join('');
+  document.getElementById('produkter-content').innerHTML = `<table class="tbl" id="produkter-tbl"><thead><tr><th>Nr.</th><th>Navn</th><th>Beskrivelse</th><th style="text-align:right">Pris</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function loadOrdrer() {
+  const res = await fetch('/api/orders');
+  const data = await res.json();
+  document.getElementById('ordrer-content').dataset.loaded = '1';
+  const rows = (data.orders || []).map(o => `<tr><td>${o.orderNumber||'—'}</td><td>${o.customer?.name||'—'}</td><td>${o.date?new Date(o.date).toLocaleDateString('da-DK'):'—'}</td><td style="text-align:right">${fmt(o.grossAmount)}</td><td><span class="badge draft">Ordre</span></td></tr>`).join('');
+  document.getElementById('ordrer-content').innerHTML = `<table class="tbl" id="ordrer-tbl"><thead><tr><th>Nummer</th><th>Kunde</th><th>Dato</th><th style="text-align:right">Beløb</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function renderPagination(containerId, total, current, callback) {
+  if (total <= 1) { document.getElementById(containerId).innerHTML = ''; return; }
+  let html = '';
+  if (current > 1) html += `<button class="page-btn" onclick="${callback.name}(${current-1})">← Forrige</button>`;
+  html += `<span class="page-info">Side ${current} af ${total}</span>`;
+  if (current < total) html += `<button class="page-btn" onclick="${callback.name}(${current+1})">Næste →</button>`;
+  document.getElementById(containerId).innerHTML = html;
 }
 </script>
 </body>

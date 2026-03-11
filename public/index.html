@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Takseringshjælp · Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#0b0f1a;--surface:#111827;--border:#1e2d45;--accent:#00d4ff;
+  --accent2:#00ff9d;--warn:#ff6b35;--text:#e8edf5;--muted:#5a6a82;--card-bg:#131c2e;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:14px;}
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 30% 40%,#0d2540 0%,var(--bg) 60%);position:relative;overflow:hidden;}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:48px 40px;width:100%;max-width:380px;box-shadow:0 0 60px rgba(0,212,255,0.07);}
+.login-logo{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.5px;margin-bottom:8px;color:var(--accent);}
+.login-sub{color:var(--muted);font-size:12px;margin-bottom:36px;letter-spacing:.05em;text-transform:uppercase;}
+.login-box label{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.login-box input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;outline:none;transition:border-color .2s;margin-bottom:20px;}
+.login-box input:focus{border-color:var(--accent);}
+.btn-primary{width:100%;background:var(--accent);color:#000;border:none;border-radius:8px;padding:13px;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;cursor:pointer;transition:opacity .2s,transform .1s;}
+.btn-primary:hover{opacity:.85;}.btn-primary:active{transform:scale(.98);}
+.login-error{color:var(--warn);font-size:12px;margin-top:12px;text-align:center;min-height:18px;}
+#app{display:none;min-height:100vh;flex-direction:column;}#app.active{display:flex;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:60px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;}
+.topbar-logo{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:var(--accent);}
+.topbar-right{display:flex;align-items:center;gap:20px;}
+.live-dot{width:8px;height:8px;background:var(--accent2);border-radius:50%;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,255,157,.4);}50%{opacity:.7;box-shadow:0 0 0 6px rgba(0,255,157,0);}}
+.topbar-time{color:var(--muted);font-size:12px;}
+.logout-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 12px;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
+.logout-btn:hover{border-color:var(--warn);color:var(--warn);}
+.navtabs{display:flex;gap:2px;padding:12px 28px 0;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;}
+.navtab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px;letter-spacing:.05em;padding:8px 16px 12px;cursor:pointer;transition:all .2s;white-space:nowrap;text-transform:uppercase;}
+.navtab:hover{color:var(--text);}.navtab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.main{flex:1;padding:28px;max-width:1400px;width:100%;margin:0 auto;}
+.page{display:none;}.page.active{display:block;}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px;}
+.stat-card{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:20px 22px;position:relative;overflow:hidden;transition:border-color .2s;}
+.stat-card:hover{border-color:var(--accent);}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);}
+.stat-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+.stat-value{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:var(--text);line-height:1;}
+.stat-value.accent{color:var(--accent);}.stat-value.green{color:var(--accent2);}.stat-value.warn{color:var(--warn);}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:6px;}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.section-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--text);}
+.refresh-btn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:5px 12px;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
+.refresh-btn:hover{border-color:var(--accent);color:var(--accent);}
+.table-wrap{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:var(--surface);border-bottom:1px solid var(--border);}
+thead th{padding:12px 16px;text-align:left;font-size:10px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:rgba(0,212,255,.03);}
+tbody td{padding:12px 16px;font-size:13px;color:var(--text);}
+.td-mono{font-family:'DM Mono',monospace;}.td-muted{color:var(--muted);}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;}
+.badge-green{background:rgba(0,255,157,.12);color:var(--accent2);}
+.badge-warn{background:rgba(255,107,53,.12);color:var(--warn);}
+.badge-blue{background:rgba(0,212,255,.12);color:var(--accent);}
+.chart-container{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:28px;}
+.chart-bars{display:flex;align-items:flex-end;gap:8px;height:160px;margin-top:16px;}
+.chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;gap:6px;}
+.chart-bar{width:100%;background:linear-gradient(180deg,var(--accent) 0%,rgba(0,212,255,.3) 100%);border-radius:4px 4px 0 0;min-height:4px;transition:opacity .2s;cursor:pointer;}
+.chart-bar:hover{opacity:.75;}
+.chart-label{font-size:9px;color:var(--muted);text-align:center;}
+.search-bar{background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;width:100%;max-width:320px;transition:border-color .2s;margin-bottom:16px;}
+.search-bar:focus{border-color:var(--accent);}
+.loading{text-align:center;padding:48px;color:var(--muted);font-size:13px;}
+.spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.pagination{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+.page-btn{background:var(--card-bg);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 12px;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
+.page-btn:hover,.page-btn.active{border-color:var(--accent);color:var(--accent);}
+@media(max-width:600px){.main{padding:16px;}.topbar{padding:0 16px;}.navtabs{padding:12px 16px 0;}.stat-value{font-size:24px;}}
+</style>
+</head>
+<body>
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">Takseringshjælp</div>
+    <div class="login-sub">Economics Dashboard · Adgang kræver kode</div>
+    <label>Adgangskode</label>
+    <input type="password" id="pw-input" placeholder="Indtast adgangskode…" autocomplete="current-password" />
+    <button class="btn-primary" onclick="doLogin()">Log ind →</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo">⬡ Takseringshjælp</div>
+    <div class="topbar-right">
+      <div class="live-dot"></div>
+      <div class="topbar-time" id="clock"></div>
+      <button class="logout-btn" onclick="logout()">Log ud</button>
+    </div>
+  </div>
+  <div class="navtabs">
+    <button class="navtab active" onclick="showPage('overview',this)">Oversigt</button>
+    <button class="navtab" onclick="showPage('invoices',this)">Fakturaer</button>
+    <button class="navtab" onclick="showPage('drafts',this)">Kladder</button>
+    <button class="navtab" onclick="showPage('unpaid',this)">Ubetalte</button>
+    <button class="navtab" onclick="showPage('customers',this)">Kunder</button>
+    <button class="navtab" onclick="showPage('products',this)">Produkter</button>
+    <button class="navtab" onclick="showPage('orders',this)">Ordrer</button>
+  </div>
+  <div class="main">
+    <div class="page active" id="page-overview">
+      <div class="stats-grid" id="stats-grid"><div class="stat-card"><div class="stat-label">Henter data…</div><div class="stat-value accent">—</div></div></div>
+      <div class="chart-container">
+        <div class="section-header"><div class="section-title">Omsætning de seneste 12 måneder</div><button class="refresh-btn" onclick="loadRevenue()">↻ Opdater</button></div>
+        <div class="chart-bars" id="revenue-chart"><div class="loading"><div class="spinner"></div>Henter…</div></div>
+      </div>
+    </div>
+    <div class="page" id="page-invoices">
+      <div class="section-header"><div class="section-title">Bogførte fakturaer</div><button class="refresh-btn" onclick="loadInvoices()">↻ Opdater</button></div>
+      <input class="search-bar" placeholder="Søg faktura, kunde…" oninput="filterTable('inv-table',this.value)" />
+      <div class="table-wrap" id="inv-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="pagination" id="inv-pages"></div>
+    </div>
+    <div class="page" id="page-drafts">
+      <div class="section-header"><div class="section-title">Fakturakladder</div><button class="refresh-btn" onclick="loadDrafts()">↻ Opdater</button></div>
+      <input class="search-bar" placeholder="Søg kladde…" oninput="filterTable('draft-table',this.value)" />
+      <div class="table-wrap" id="draft-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <div class="page" id="page-unpaid">
+      <div class="section-header"><div class="section-title">Ubetalte fakturaer</div><button class="refresh-btn" onclick="loadUnpaid()">↻ Opdater</button></div>
+      <div class="table-wrap" id="unpaid-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <div class="page" id="page-customers">
+      <div class="section-header"><div class="section-title">Kunder</div><button class="refresh-btn" onclick="loadCustomers()">↻ Opdater</button></div>
+      <input class="search-bar" placeholder="Søg kundenavn…" oninput="filterTable('cust-table',this.value)" />
+      <div class="table-wrap" id="cust-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
+      <div class="pagination" id="cust-pages"></div>
+    </div>
+    <div class="page" id="page-products">
+      <div class="section-header"><div class="section-title">Produkter</div><button class="refresh-btn" onclick="loadProducts()">↻ Opdater</button></div>
+      <input class="search-bar" placeholder="Søg produkt…" oninput="filterTable('prod-table',this.value)" />
+      <div class="table-wrap" id="prod-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+    <div class="page" id="page-orders">
+      <div class="section-header"><div class="section-title">Ordrer</div><button class="refresh-btn" onclick="loadOrders()">↻ Opdater</button></div>
+      <div class="table-wrap" id="orders-table-wrap"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+</div>
+<script>
+const BASE='';
+let token=null,invPage=0,custPage=0;
+function updateClock(){const n=new Date();document.getElementById('clock').textContent=n.toLocaleDateString('da-DK')+' '+n.toTimeString().slice(0,5);}
+setInterval(updateClock,1000);updateClock();
+document.getElementById('pw-input').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+async function doLogin(){
+  const pw=document.getElementById('pw-input').value;
+  const err=document.getElementById('login-error');err.textContent='';
+  try{const r=await fetch(`${BASE}/api/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})});
+  const d=await r.json();
+  if(d.success){token=d.token;document.getElementById('login-screen').style.display='none';document.getElementById('app').classList.add('active');loadAll();}
+  else err.textContent=d.error||'Forkert adgangskode';}
+  catch(e){err.textContent='Kunne ikke forbinde til server';}
+}
+function logout(){token=null;document.getElementById('login-screen').style.display='flex';document.getElementById('app').classList.remove('active');document.getElementById('pw-input').value='';}
+async function api(path){const r=await fetch(`${BASE}${path}`,{headers:{'x-dashboard-token':token}});if(!r.ok)throw new Error(`API ${r.status}`);return r.json();}
+const pageLoaders={invoices:()=>loadInvoices(),drafts:()=>loadDrafts(),unpaid:()=>loadUnpaid(),customers:()=>loadCustomers(),products:()=>loadProducts(),orders:()=>loadOrders()};
+const loadedPages=new Set(['overview']);
+function showPage(name,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.navtab').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');btn.classList.add('active');
+  if(!loadedPages.has(name)){loadedPages.add(name);pageLoaders[name]?.();}
+}
+function loadAll(){loadSummary();loadRevenue();}
+async function loadSummary(){
+  try{const d=await api('/api/summary');
+  document.getElementById('stats-grid').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Bogførte fakturaer</div><div class="stat-value accent">${fmt(d.bookedInvoices)}</div><div class="stat-sub">Total antal</div></div>
+    <div class="stat-card"><div class="stat-label">Fakturakladder</div><div class="stat-value">${fmt(d.draftInvoices)}</div><div class="stat-sub">Afventer bogføring</div></div>
+    <div class="stat-card"><div class="stat-label">Kunder</div><div class="stat-value green">${fmt(d.customers)}</div><div class="stat-sub">Registrerede</div></div>
+    <div class="stat-card"><div class="stat-label">Produkter</div><div class="stat-value">${fmt(d.products)}</div><div class="stat-sub">I kataloget</div></div>`;}
+  catch(e){document.getElementById('stats-grid').innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+}
+async function loadRevenue(){
+  const el=document.getElementById('revenue-chart');
+  el.innerHTML='<div class="loading"><div class="spinner"></div>Henter…</div>';
+  try{const d=await api('/api/revenue');const months=d.monthly||[];
+  if(!months.length){el.innerHTML='<div class="loading">Ingen data</div>';return;}
+  const max=Math.max(...months.map(m=>m[1]));
+  el.innerHTML=months.map(([m,v])=>`<div class="chart-bar-wrap" title="${m}: ${fmtCurrency(v)}"><div class="chart-bar" style="height:${Math.round((v/max)*100)}%"></div><div class="chart-label">${m.slice(5)}</div></div>`).join('');}
+  catch(e){el.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+}
+async function loadInvoices(page=0){
+  invPage=page;const wrap=document.getElementById('inv-table-wrap');
+  wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  try{const d=await api(`/api/invoices/booked?page=${page}`);const items=d.collection||[];const total=d.pagination?.results||0;
+  wrap.innerHTML=items.length?`<table id="inv-table"><thead><tr><th>Faktura #</th><th>Kunde</th><th>Dato</th><th>Forfalder</th><th>Beløb</th><th>Restance</th><th>Status</th></tr></thead><tbody>${items.map(inv=>{const overdue=inv.dueDate&&new Date(inv.dueDate)<new Date()&&(inv.remainder||0)>0;const badge=overdue?'<span class="badge badge-warn">Forfalden</span>':(inv.remainder>0)?'<span class="badge badge-blue">Udestående</span>':'<span class="badge badge-green">Betalt</span>';return`<tr><td class="td-mono">${inv.bookedInvoiceNumber||'—'}</td><td>${inv.customer?.name||'—'}</td><td class="td-muted">${inv.date||'—'}</td><td class="td-muted">${inv.dueDate||'—'}</td><td class="td-mono">${fmtCurrency(inv.grossAmount)}</td><td class="td-mono">${fmtCurrency(inv.remainder)}</td><td>${badge}</td></tr>`;}).join('')}</tbody></table>`:'<div class="loading">Ingen fakturaer</div>';
+  renderPages('inv-pages',page,total,50,loadInvoices);}
+  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+}
+async function loadDrafts(){
+  const wrap=document.getElementById('draft-table-wrap');wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  try{const d=await api('/api/invoices/drafts');const items=d.collection||[];
+  wrap.innerHTML=items.length?`<table id="draft-table"><thead><tr><th>Kladde #</th><th>Kunde</th><th>Dato</th><th>Beløb</th></tr></thead><tbody>${items.map(inv=>`<tr><td class="td-mono">${inv.draftInvoiceNumber||'—'}</td><td>${inv.customer?.name||'—'}</td><td class="td-muted">${inv.date||'—'}</td><td class="td-mono">${fmtCurrency(inv.grossAmount)}</td></tr>`).join('')}</tbody></table>`:'<div class="loading">Ingen kladder</div>';}
+  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+}
+async function loadUnpaid(){
+  const wrap=document.getElementById('unpaid-table-wrap');wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  try{const d=await api('/api/invoices/unpaid');const items=(d.collection||[]).filter(i=>(i.remainder||0)>0);
+  wrap.innerHTML=items.length?`<table><thead><tr><th>Faktura #</th><th>Kunde</th><th>Forfalder</th><th>Restance</th><th>Status</th></tr></thead><tbody>${items.map(inv=>{const overdue=inv.dueDate&&new Date(inv.dueDate)<new Date();return`<tr><td class="td-mono">${inv.bookedInvoiceNumber||'—'}</td><td>${inv.customer?.name||'—'}</td><td class="td-muted">${inv.dueDate||'—'}</td><td class="td-mono" style="color:var(--warn)">${fmtCurrency(inv.remainder)}</td><td>${overdue?'<span class="badge badge-warn">Forfalden</span>':'<span class="badge badge-blue">Udestående</span>'}</td></tr>`;}).join('')}</tbody></table>`:'<div class="loading" style="color:var(--accent2)">✓ Ingen ubetalte fakturaer</div>';}
+  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+}
+async function loadCustomers(page=0){
+  custPage=page;const wrap=document.getElementById('cust-table-wrap');wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  try{const d=await api(`/api/customers?page=${page}`);const items=d.collection||[];const total=d.pagination?.results||0;
+  wrap.innerHTML=items.length?`<table id="cust-table"><thead><tr><th>Kundnr.</th><th>Navn</th><th>Email</th><th>Telefon</th><th>Saldo</th></tr></thead><tbody>${items.map(c=>`<tr><td class="td-mono">${c.customerNumber||'—'}</td><td>${c.name||'—'}</td><td class="td-muted">${c.email||'—'}</td><td class="td-muted">${c.telephoneAndFaxNumber||'—'}</td><td class="td-mono">${fmtCurrency(c.balance)}</td></tr>`).join('')}</tbody></table>`:'<div class="loading">Ingen kunder</div>';
+  renderPages('cust-pages',page,total,50,loadCustomers);}
+  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+}
+async function loadProducts(){
+  const wrap=document.getElementById('prod-table-wrap');wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  try{const d=await api('/api/products');const items=d.collection||[];
+  wrap.innerHTML=items.length?`<table id="prod-table"><thead><tr><th>Produktnr.</th><th>Navn</th><th>Enhed</th><th>Pris ex. moms</th><th>Lager</th></tr></thead><tbody>${items.map(p=>`<tr><td class="td-mono">${p.productNumber||'—'}</td><td>${p.name||'—'}</td><td class="td-muted">${p.unit?.name||'—'}</td><td class="td-mono">${fmtCurrency(p.salesPrice)}</td><td class="td-mono">${p.inventory!=null?p.inventory:'—'}</td></tr>`).join('')}</tbody></table>`:'<div class="loading">Ingen produkter</div>';}
+  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+}
+async function loadOrders(){
+  const wrap=document.getElementById('orders-table-wrap');wrap.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+  try{const d=await api('/api/orders');const items=d.collection||[];
+  wrap.innerHTML=items.length?`<table><thead><tr><th>Ordre #</th><th>Kunde</th><th>Dato</th><th>Beløb</th></tr></thead><tbody>${items.map(o=>`<tr><td class="td-mono">${o.orderNumber||'—'}</td><td>${o.customer?.name||'—'}</td><td class="td-muted">${o.date||'—'}</td><td class="td-mono">${fmtCurrency(o.grossAmount)}</td></tr>`).join('')}</tbody></table>`:'<div class="loading">Ingen ordrer</div>';}
+  catch(e){wrap.innerHTML=`<div class="loading">Fejl: ${e.message}</div>`;}
+}
+function fmt(n){return(n||0).toLocaleString('da-DK');}
+function fmtCurrency(n){if(n==null)return'—';return n.toLocaleString('da-DK',{minimumFractionDigits:2,maximumFractionDigits:2})+' kr.';}
+function filterTable(tableId,q){const t=document.getElementById(tableId);if(!t)return;t.querySelectorAll('tbody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
+function renderPages(elId,currentPage,total,perPage,loader){
+  const pages=Math.ceil(total/perPage);if(pages<=1){document.getElementById(elId).innerHTML='';return;}
+  let html='';
+  if(currentPage>0)html+=`<button class="page-btn" onclick="${loader.name}(${currentPage-1})">← Forrige</button>`;
+  html+=`<span class="page-btn active">${currentPage+1} / ${pages}</span>`;
+  if(currentPage<pages-1)html+=`<button class="page-btn" onclick="${loader.name}(${currentPage+1})">Næste →</button>`;
+  document.getElementById(elId).innerHTML=html;
+}
+</script>
+</body>
+</html>

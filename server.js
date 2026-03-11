@@ -19,6 +19,22 @@ const HEADERS = {
 };
 const BASE = 'https://restapi.e-conomic.com';
 
+// ─── KONTOPLAN MAPPING ────────────────────────────────────
+const PL_MAP = {
+  revenue:        { from: 1004, to: 1030 },
+  directPay:      { from: 1100, to: 1112 },
+  cogs:           { from: 1310, to: 1330 },
+  salaries:       { from: 2210, to: 2285 },
+  otherPersonnel: { from: 2440, to: 2440 },
+  salesCosts:     { from: 2740, to: 2811 },
+  carCosts:       { from: 3110, to: 3140 },
+  rent:           { from: 3410, to: 3450 },
+  adminCosts:     { from: 3600, to: 3790 },
+  depreciation:   { from: 3910, to: 3950 },
+  interestIncome: { from: 4310, to: 4381 },
+  interestCosts:  { from: 4410, to: 4481 },
+};
+
 // ─── LOGIN ────────────────────────────────────────────────
 app.post('/api/login', (req, res) => {
   if (req.body.password === PASSWORD) res.json({ ok: true });
@@ -42,55 +58,125 @@ app.get('/api/summary', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── HENT FINANSPOSTER FOR ET ÅR ─────────────────────────
+async function fetchJournalEntries(year) {
+  const from = `${year}-01-01`;
+  const to   = `${year}-12-31`;
+  let all = [];
+  let page = 1;
+  while (true) {
+    const r = await fetch(
+      `${BASE}/journals/entries/booked?filter=date$gte:${from}$and:date$lte:${to}&pagesize=200&skippages=${page-1}`,
+      { headers: HEADERS }
+    );
+    const d = await r.json();
+    const items = d.collection || [];
+    all = all.concat(items);
+    if (items.length < 200) break;
+    page++;
+  }
+  return all;
+}
+
+function inRange(accountNo, range) {
+  return accountNo >= range.from && accountNo <= range.to;
+}
+
+function sumCategory(entries, range, month) {
+  return entries
+    .filter(e => {
+      const m = new Date(e.date).getMonth() + 1;
+      return m === month && inRange(e.account?.accountNumber || 0, range);
+    })
+    .reduce((sum, e) => sum + (e.amount || 0), 0);
+}
+
 // ─── REVENUE + P/L PER MÅNED ──────────────────────────────
 app.get('/api/revenue', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const from = `${year}-01-01`;
-    const to   = `${year}-12-31`;
 
-    let allInvoices = [];
-    let page = 1;
-    while (true) {
-      const r = await fetch(
-        `${BASE}/invoices/booked?filter=date$gte:${from}$and:date$lte:${to}&pagesize=200&skippages=${page-1}`,
-        { headers: HEADERS }
-      );
-      const d = await r.json();
-      const items = d.collection || [];
-      allInvoices = allInvoices.concat(items);
-      if (items.length < 200) break;
-      page++;
-    }
+    // Hent finansposter og fakturaer parallelt
+    const [entries, invoiceData] = await Promise.all([
+      fetchJournalEntries(year),
+      fetchAllInvoices(year)
+    ]);
 
-    const months = Array.from({length:12}, (_, i) => ({
-      month: i + 1,
-      revenue: 0,
-      customers: new Set(),
-      cashflow: 0
-    }));
+    const months = Array.from({length: 12}, (_, i) => {
+      const m = i + 1;
+      const invoices = invoiceData.filter(inv => new Date(inv.date).getMonth() + 1 === m);
 
-    allInvoices.forEach(inv => {
-      const d = new Date(inv.date);
-      if (d.getFullYear() !== year) return;
-      const m = d.getMonth();
-      const amount = inv.grossAmount || 0;
-      months[m].revenue += amount;
-      if (inv.customer?.customerNumber) months[m].customers.add(inv.customer.customerNumber);
-      if ((inv.remainder || 0) === 0) months[m].cashflow += amount;
+      // Omsætning fra finansposter (kredit = negativ i e-conomic → gør positiv)
+      const revenue      = -sumCategory(entries, PL_MAP.revenue, m);
+      const directPay    = -sumCategory(entries, PL_MAP.directPay, m);
+      const totalRevenue = revenue + directPay;
+
+      // Omkostninger (debet = positiv i e-conomic)
+      const cogs           = sumCategory(entries, PL_MAP.cogs, m);
+      const salaries       = sumCategory(entries, PL_MAP.salaries, m) + sumCategory(entries, PL_MAP.otherPersonnel, m);
+      const rent           = sumCategory(entries, PL_MAP.rent, m);
+      const salesCosts     = sumCategory(entries, PL_MAP.salesCosts, m);
+      const carCosts       = sumCategory(entries, PL_MAP.carCosts, m);
+      const adminCosts     = sumCategory(entries, PL_MAP.adminCosts, m);
+      const otherOpex      = salesCosts + carCosts + adminCosts;
+      const depreciation   = sumCategory(entries, PL_MAP.depreciation, m);
+      const interestIncome = -sumCategory(entries, PL_MAP.interestIncome, m);
+      const interestCosts  = sumCategory(entries, PL_MAP.interestCosts, m);
+      const interest       = interestCosts - interestIncome;
+
+      // Cashflow: betalte fakturaer denne måned
+      const cashflow = invoices
+        .filter(inv => (inv.remainder || 0) === 0)
+        .reduce((s, inv) => s + (inv.grossAmount || 0), 0);
+
+      // Kunder
+      const customerSet = new Set(invoices.map(inv => inv.customer?.customerNumber).filter(Boolean));
+
+      return {
+        month: m,
+        revenue: totalRevenue,
+        cogs,
+        salaries,
+        rent,
+        otherOpex,
+        depreciation,
+        interest,
+        cashflow,
+        customers: customerSet.size,
+        _customerIds: [...customerSet]
+      };
     });
 
-    const seenCustomers = new Set();
+    // Beregn nye kunder pr. måned
+    const seen = new Set();
     months.forEach(m => {
-      const newOnes = [...m.customers].filter(c => !seenCustomers.has(c)).length;
-      m.newCustomers = newOnes;
-      m.customers.forEach(c => seenCustomers.add(c));
-      m.customers = m.customers.size;
+      m.newCustomers = m._customerIds.filter(c => !seen.has(c)).length;
+      m._customerIds.forEach(c => seen.add(c));
+      delete m._customerIds;
     });
 
     res.json({ year, months });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+async function fetchAllInvoices(year) {
+  const from = `${year}-01-01`;
+  const to   = `${year}-12-31`;
+  let all = [];
+  let page = 1;
+  while (true) {
+    const r = await fetch(
+      `${BASE}/invoices/booked?filter=date$gte:${from}$and:date$lte:${to}&pagesize=200&skippages=${page-1}`,
+      { headers: HEADERS }
+    );
+    const d = await r.json();
+    const items = d.collection || [];
+    all = all.concat(items);
+    if (items.length < 200) break;
+    page++;
+  }
+  return all;
+}
 
 // ─── BOGFØRTE FAKTURAER ───────────────────────────────────
 app.get('/api/invoices/booked', async (req, res) => {

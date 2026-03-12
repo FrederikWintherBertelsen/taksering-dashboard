@@ -39,31 +39,10 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/test-journal', async (req, res) => {
   try {
-    let all = [];
-    let url = `${BASE}/accounting-years/2026/entries?pagesize=1000&skippages=0&filter=date$gte:2026-02-01$and:date$lte:2026-02-28`;
-    while (url) {
-      const r = await fetch(url, { headers: HEADERS });
-      const d = await r.json();
-      all = all.concat(d.collection || []);
-      url = d.pagination?.nextPage || null;
-    }
-
-    // Grupper ALLE konti
-    const byAccount = {};
-    all.forEach(e => {
-      const acc = e.account?.accountNumber;
-      if (!acc) return;
-      if (!byAccount[acc]) byAccount[acc] = { total: 0, count: 0 };
-      byAccount[acc].total += e.amount;
-      byAccount[acc].count++;
-    });
-
-    // Sorter efter kontonummer
-    const sorted = Object.fromEntries(
-      Object.entries(byAccount).sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
-    );
-
-    res.json({ totalEntries: all.length, byAccount: sorted });
+    // Hent alle journals
+    const jRes = await fetch(`${BASE}/journals`, { headers: HEADERS });
+    const jData = await jRes.json();
+    res.json(jData);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

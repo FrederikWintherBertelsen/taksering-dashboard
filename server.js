@@ -39,16 +39,17 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/test-journal', async (req, res) => {
   try {
-    // Hent alle journals
-    const jRes = await fetch(`${BASE}/journals`, { headers: HEADERS });
-    const jData = await jRes.json();
-    res.json(jData);
+    // Test: hent de første 3 kladde-entries fra journal 1
+    const r = await fetch(`${BASE}/journals/1/entries?pagesize=3`, { headers: HEADERS });
+    const d = await r.json();
+    res.json(d);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
 async function fetchAllEntries(year) {
+  // Bogførte entries
   let all = [];
   let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
   while (url) {
@@ -57,6 +58,24 @@ async function fetchAllEntries(year) {
     all = all.concat(d.collection || []);
     url = d.pagination?.nextPage || null;
   }
+
+  // Kladde entries fra alle journals
+  const journalNums = [1, 2, 3, 8, 11, 12, 13];
+  for (const jNum of journalNums) {
+    let url = `${BASE}/journals/${jNum}/entries?pagesize=1000&skippages=0`;
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      const entries = (d.collection || []).filter(e => {
+        if (!e.date) return false;
+        const entryYear = new Date(e.date).getFullYear();
+        return entryYear === year;
+      });
+      all = all.concat(entries);
+      url = d.pagination?.nextPage || null;
+    }
+  }
+
   return all;
 }
 

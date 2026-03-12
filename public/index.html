@@ -72,7 +72,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
 .pl tr:hover td { background:rgba(255,255,255,.02); }
 .pl td { padding:5px 4px; border-bottom:1px solid #0f1825; }
 .pl tr:last-child td { border-bottom:none; }
-.pl .pl-cat td { border-bottom:none; padding-bottom:2px; }
+.pl-cat td { border-bottom:none !important; padding-top:10px !important; padding-bottom:3px !important; font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:#3a4f6a; }
 .pl-name { color:#8a9ab8; padding-left:10px !important; }
 .pl-name-bold { color:#c8d5e8; font-weight:500; }
 .pl-amount { text-align:right; font-family:'DM Mono',monospace; }
@@ -102,7 +102,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
 .page-btn:hover, .page-btn.active { border-color:var(--accent); color:var(--accent); }
 .page-info { color:var(--muted); font-size:11px; }
 
-/* TOOLTIP */
 .liq-tooltip { position:absolute; background:#1a2840; border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:11px; pointer-events:none; display:none; z-index:10; }
 .liq-tooltip-date { color:var(--muted); margin-bottom:3px; }
 .liq-tooltip-val { font-family:'Syne',sans-serif; font-weight:800; color:var(--green); font-size:14px; }
@@ -141,10 +140,8 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
     <div class="tab" onclick="showTab('ordrer')">Ordrer</div>
   </div>
 
-  <!-- OVERSIGT -->
   <div id="view-oversigt" class="view active">
     <div class="main">
-
       <div class="month-picker">
         <button class="year-btn" onclick="setYear(2024)" id="yr-2024">2024</button>
         <button class="year-btn" onclick="setYear(2025)" id="yr-2025">2025</button>
@@ -213,7 +210,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
         </div>
       </div>
 
-      <!-- LIKVIDITET DAGLIG -->
       <div class="card">
         <div class="card-header">
           <div>
@@ -230,11 +226,9 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
           <svg id="liq-svg" style="width:100%;height:140px;overflow:visible;display:block"></svg>
         </div>
       </div>
-
     </div>
   </div>
 
-  <!-- FAKTURAER -->
   <div id="view-fakturaer" class="view">
     <div class="main">
       <input class="search-bar" placeholder="Søg fakturaer..." oninput="filterTable('fakturaer-tbl', this.value)">
@@ -243,7 +237,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
     </div>
   </div>
 
-  <!-- KLADDER -->
   <div id="view-kladder" class="view">
     <div class="main">
       <input class="search-bar" placeholder="Søg kladder..." oninput="filterTable('kladder-tbl', this.value)">
@@ -251,7 +244,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
     </div>
   </div>
 
-  <!-- UBETALTE -->
   <div id="view-ubetalte" class="view">
     <div class="main">
       <input class="search-bar" placeholder="Søg ubetalte..." oninput="filterTable('ubetalte-tbl', this.value)">
@@ -259,7 +251,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
     </div>
   </div>
 
-  <!-- KUNDER -->
   <div id="view-kunder" class="view">
     <div class="main">
       <input class="search-bar" placeholder="Søg kunder..." oninput="filterTable('kunder-tbl', this.value)">
@@ -268,7 +259,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
     </div>
   </div>
 
-  <!-- PRODUKTER -->
   <div id="view-produkter" class="view">
     <div class="main">
       <input class="search-bar" placeholder="Søg produkter..." oninput="filterTable('produkter-tbl', this.value)">
@@ -276,7 +266,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
     </div>
   </div>
 
-  <!-- ORDRER -->
   <div id="view-ordrer" class="view">
     <div class="main">
       <input class="search-bar" placeholder="Søg ordrer..." oninput="filterTable('ordrer-tbl', this.value)">
@@ -289,6 +278,19 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
 let selectedYear  = new Date().getFullYear();
 let selectedMonth = new Date().getMonth() + 1;
 let revenueData   = [];
+
+const monthNames = ['','Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+
+function fmt(n) {
+  if (n == null) return '—';
+  return Math.round(n).toLocaleString('da-DK') + ' kr.';
+}
+function fmtShort(n) {
+  if (!n) return '0';
+  if (Math.abs(n) >= 1000000) return (n/1000000).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1000) return Math.round(n/1000) + 'k';
+  return Math.round(n).toString();
+}
 
 async function doLogin() {
   const pw = document.getElementById('password-input').value;
@@ -310,8 +312,7 @@ function logout() {
 
 function updateClock() {
   const now = new Date();
-  document.getElementById('clock').textContent =
-    now.toLocaleDateString('da-DK') + ' · ' + now.toLocaleTimeString('da-DK', {hour:'2-digit', minute:'2-digit'});
+  document.getElementById('clock').textContent = now.toLocaleDateString('da-DK') + ' · ' + now.toLocaleTimeString('da-DK', {hour:'2-digit', minute:'2-digit'});
 }
 setInterval(updateClock, 1000);
 updateClock();
@@ -321,9 +322,7 @@ function showTab(name) {
   tabNames.forEach(t => {
     document.getElementById('view-' + t).classList.toggle('active', t === name);
   });
-  document.querySelectorAll('.tab').forEach((el, i) => {
-    el.classList.toggle('active', tabNames[i] === name);
-  });
+  document.querySelectorAll('.tab').forEach((el, i) => el.classList.toggle('active', tabNames[i] === name));
   if (name === 'fakturaer' && !document.getElementById('fakturaer-content').dataset.loaded) loadFakturaer();
   if (name === 'kladder'   && !document.getElementById('kladder-content').dataset.loaded)   loadKladder();
   if (name === 'ubetalte'  && !document.getElementById('ubetalte-content').dataset.loaded)  loadUbetalte();
@@ -342,21 +341,12 @@ function setMonth(m) {
   selectedMonth = m;
   document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('mo-' + m).classList.add('active');
-  loadOversigt();
+  renderStats();
+  renderPL();
+  renderRevenueChart();
+  renderCustomerChart();
 }
 document.getElementById('mo-' + selectedMonth).classList.add('active');
-
-function fmt(n) {
-  if (n == null) return '—';
-  return Math.round(n).toLocaleString('da-DK') + ' kr.';
-}
-function fmtShort(n) {
-  if (n == null || n === 0) return '0';
-  if (Math.abs(n) >= 1000000) return (n/1000000).toFixed(1) + 'M';
-  if (Math.abs(n) >= 1000)    return Math.round(n/1000) + 'k';
-  return Math.round(n).toString();
-}
-const monthNames = ['','Jan','Feb','Mar','Apr','Maj','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
 
 function filterTable(tblId, query) {
   const tbl = document.getElementById(tblId);
@@ -374,11 +364,10 @@ function initDashboard() {
 async function loadOversigt() {
   try {
     const res = await fetch(`/api/revenue?year=${selectedYear}`);
-    const data = await res.json();
-    revenueData = data.months || [];
-    renderRevenueChart();
+    revenueData = (await res.json()).months || [];
     renderStats();
     renderPL();
+    renderRevenueChart();
     renderCustomerChart();
   } catch(e) { console.error(e); }
 }
@@ -392,14 +381,13 @@ async function loadLiquidity() {
 }
 
 function renderStats() {
-  const monthData = revenueData.find(m => m.month === selectedMonth) || {};
-  const ytd = revenueData.filter(m => m.month <= selectedMonth).reduce((s,m) => s + (m.revenue||0), 0);
-  const prev = (revenueData.find(m => m.month === selectedMonth - 1) || {}).revenue || 0;
-  const cur = monthData.revenue || 0;
+  const cur  = revenueData.find(m => m.month === selectedMonth) || {};
+  const prev = revenueData.find(m => m.month === selectedMonth - 1) || {};
+  const ytd  = revenueData.filter(m => m.month <= selectedMonth).reduce((s,m) => s + (m.revenue||0), 0);
   document.getElementById('stat-label-month').textContent = `Omsætning ${monthNames[selectedMonth]} ${selectedYear}`;
-  document.getElementById('stat-month').textContent = fmt(cur);
-  if (prev > 0) {
-    const pct = Math.round(((cur - prev) / prev) * 100);
+  document.getElementById('stat-month').textContent = fmt(cur.revenue);
+  if (prev.revenue > 0) {
+    const pct = Math.round(((cur.revenue - prev.revenue) / prev.revenue) * 100);
     const sub = document.getElementById('stat-month-sub');
     sub.textContent = (pct >= 0 ? '↑ ' : '↓ ') + Math.abs(pct) + '% vs. ' + monthNames[selectedMonth-1];
     sub.className = 'stat-sub ' + (pct >= 0 ? 'up' : 'down');
@@ -425,11 +413,11 @@ function renderCustomerChart() {
   document.getElementById('cust-count').textContent = (cur.customers || '—') + ' kunder';
   document.getElementById('cust-new').textContent = cur.newCustomers != null ? '+' + cur.newCustomers : '—';
   document.getElementById('cust-avg').textContent = cur.customers && cur.revenue ? fmtShort(cur.revenue / cur.customers) + ' kr.' : '—';
-  const known = revenueData.filter(m => m.customers != null && m.month <= selectedMonth);
+  const known = revenueData.filter(m => m.customers != null && m.month <= selectedMonth && m.customers > 0);
   if (known.length < 2) { document.getElementById('cust-svg').innerHTML = '<text x="150" y="40" font-size="10" fill="#3a4f6a" text-anchor="middle">Ikke nok data endnu</text>'; return; }
   const maxC = Math.max(...known.map(m => m.customers), 1);
   const xStep = 300 / 11;
-  const pts = revenueData.map((m, i) => ({ x: i * xStep + xStep/2, y: m.customers != null ? 60 - (m.customers/maxC)*55 : null, m }));
+  const pts = revenueData.map((m, i) => ({ x: i * xStep + xStep/2, y: m.customers ? 60 - (m.customers/maxC)*55 : null, m }));
   const kp = pts.filter(p => p.y != null && p.m.month <= selectedMonth);
   const lk = kp[kp.length-1];
   let svg = `<defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00ff9d" stop-opacity=".2"/><stop offset="100%" stop-color="#00ff9d" stop-opacity="0"/></linearGradient></defs>`;
@@ -452,124 +440,117 @@ function renderCustomerChart() {
 function renderPL() {
   const cur = revenueData.find(m => m.month === selectedMonth) || {};
   document.getElementById('pl-period').textContent = `${monthNames[selectedMonth]} ${selectedYear}`;
-  const rev = cur.revenue || 0;
-  const cogs = cur.cogs || 0;
-  const gross = rev - cogs;
-  const opex = cur.opex || 0;
-  const ebitda = gross - opex;
-  const depr = cur.depreciation || 0;
-  const interest = cur.interest || 0;
-  const net = ebitda - depr - interest;
-  const gp = rev ? Math.round(gross/rev*100) : 0;
-  const ep = rev ? Math.round(ebitda/rev*100) : 0;
-  const np = rev ? Math.round(net/rev*100) : 0;
-  function bar(pct, color) { return `<td class="pl-bar-td"><div class="pl-bar-outer"><div class="pl-bar-inner" style="width:${Math.min(Math.abs(pct),100)}%;background:${color}"></div></div></td>`; }
-  function row(name, val, pct, color) {
-    const bc = val < 0 ? 'linear-gradient(90deg,#ff6b35,rgba(255,107,53,.4))' : `linear-gradient(90deg,${color},transparent)`;
-    return `<tr><td class="pl-name">${name}</td>${bar(pct,bc)}<td class="pl-pct" style="color:${val<0?'#ff6b35':color}">${pct}%</td><td class="pl-amount" style="color:${val<0?'#ff6b35':color}">${fmt(val)}</td></tr>`;
+
+  const rev        = cur.revenue || 0;
+  const cogs       = cur.cogs || 0;
+  const gross      = rev - cogs;
+  const salaries   = cur.salaries || 0;
+  const salesCosts = cur.salesCosts || 0;
+  const rent       = cur.rent || 0;
+  const adminCosts = cur.adminCosts || 0;
+  const opex       = salaries + salesCosts + rent + adminCosts;
+  const ebitda     = gross - opex;
+  const financial  = cur.financial || 0;
+  const net        = ebitda - financial;
+
+  const gp  = rev ? Math.round(gross/rev*100)  : 0;
+  const ep  = rev ? Math.round(ebitda/rev*100) : 0;
+  const np  = rev ? Math.round(net/rev*100)    : 0;
+
+  function bar(val, pct) {
+    const color = val < 0 ? 'linear-gradient(90deg,#ff6b35,rgba(255,107,53,.4))' : 'linear-gradient(90deg,#00d4ff,rgba(0,212,255,.2))';
+    return `<td class="pl-bar-td"><div class="pl-bar-outer"><div class="pl-bar-inner" style="width:${Math.min(Math.abs(pct),100)}%;background:${color}"></div></div></td>`;
   }
+  function row(name, val, rev) {
+    const pct = rev ? Math.round(val/rev*100) : 0;
+    const col = val < 0 ? '#ff6b35' : '#8a9ab8';
+    return `<tr><td class="pl-name">${name}</td>${bar(val,pct)}<td class="pl-pct" style="color:${col}">${pct}%</td><td class="pl-amount" style="color:${col}">${fmt(val)}</td></tr>`;
+  }
+  function subtotal(name, val, pct, large) {
+    return `<tr class="pl-divider"><td class="pl-name-bold">${name}</td><td class="pl-bar-td"></td><td class="pl-pct" style="color:#00d4ff">${pct}%</td><td class="pl-amount" style="color:#00d4ff;font-family:'Syne',sans-serif;font-size:${large?'15':'13'}px;font-weight:800">${fmt(val)}</td></tr>`;
+  }
+
   document.getElementById('pl-content').innerHTML = `<table class="pl">
-    <tr class="pl-cat"><td colspan="4" style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#3a4f6a;padding-top:4px;padding-bottom:4px;border-bottom:none">Omsætning</td></tr>
-    ${row('Nettoomsætning', rev, 100, '#00d4ff')}
-    <tr class="pl-cat"><td colspan="4" style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#3a4f6a;padding-top:10px;padding-bottom:4px;border-bottom:none">Direkte omkostninger</td></tr>
-    ${row('Vareforbrug & underleverandører', -cogs, -Math.round(cogs/rev*100||0), '#ff6b35')}
-    <tr class="pl-divider"><td class="pl-name-bold">Bruttoresultat</td><td class="pl-bar-td"></td><td class="pl-pct" style="color:#00d4ff;font-size:11px">${gp}%</td><td class="pl-amount" style="color:#00d4ff;font-family:'Syne',sans-serif;font-size:14px;font-weight:800">${fmt(gross)}</td></tr>
-    <tr class="pl-cat"><td colspan="4" style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#3a4f6a;padding-top:10px;padding-bottom:4px;border-bottom:none">Driftsomkostninger</td></tr>
-    ${row('Løn & honorarer', -(cur.salaries||0), -Math.round((cur.salaries||0)/rev*100||0), '#ff6b35')}
-    ${row('Husleje & kontor', -(cur.rent||0), -Math.round((cur.rent||0)/rev*100||0), '#ff6b35')}
-    ${row('Øvrige driftsomk.', -(cur.otherOpex||0), -Math.round((cur.otherOpex||0)/rev*100||0), '#ff6b35')}
-    <tr class="pl-divider"><td class="pl-name-bold">EBITDA</td><td class="pl-bar-td"></td><td class="pl-pct" style="color:#00d4ff;font-size:11px">${ep}%</td><td class="pl-amount" style="color:#00d4ff;font-family:'Syne',sans-serif;font-size:14px;font-weight:800">${fmt(ebitda)}</td></tr>
-    <tr class="pl-cat"><td colspan="4" style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#3a4f6a;padding-top:10px;padding-bottom:4px;border-bottom:none">Finansielle poster</td></tr>
-    ${row('Afskrivninger', -depr, -Math.round(depr/rev*100||0), '#5a6a82')}
-    ${row('Renteomk.', -interest, -Math.round(interest/rev*100||0), '#5a6a82')}
-    <tr class="pl-final"><td style="font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#e8edf5">Resultat før skat</td><td class="pl-bar-td"></td><td class="pl-pct" style="color:#00ff9d;font-size:11px;font-weight:700">${np}%</td><td class="pl-amount" style="color:#00ff9d;font-family:'Syne',sans-serif;font-size:15px;font-weight:800;text-shadow:0 0 20px rgba(0,255,157,.4)">${fmt(net)}</td></tr>
+    <tr class="pl-cat"><td colspan="4">Omsætning</td></tr>
+    ${row('Nettoomsætning', rev, rev)}
+    <tr class="pl-cat"><td colspan="4">Direkte omkostninger</td></tr>
+    ${row('Vareforbrug & underleverandører', -cogs, rev)}
+    ${subtotal('Bruttoresultat', gross, gp, false)}
+    <tr class="pl-cat"><td colspan="4">Driftsomkostninger</td></tr>
+    ${row('Løn & honorarer', -salaries, rev)}
+    ${row('Salgs- og rejseomkostninger', -salesCosts, rev)}
+    ${row('Lokale & kontor', -rent, rev)}
+    ${row('Administrationsomkostninger', -adminCosts, rev)}
+    ${subtotal('EBITDA', ebitda, ep, false)}
+    <tr class="pl-cat"><td colspan="4">Finansielle poster</td></tr>
+    ${row('Finansielle poster', -financial, rev)}
+    <tr class="pl-final"><td style="font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:#e8edf5">Resultat før skat</td><td class="pl-bar-td"></td><td class="pl-pct" style="color:${net>=0?'#00ff9d':'#ff6b35'};font-size:11px;font-weight:700">${np}%</td><td class="pl-amount" style="color:${net>=0?'#00ff9d':'#ff6b35'};font-family:'Syne',sans-serif;font-size:15px;font-weight:800">${fmt(net)}</td></tr>
   </table>`;
 }
 
-// ─── DAGLIG LIKVIDITETSGRAF ───────────────────────────────
 function renderLiquidityChart(days) {
   const svg = document.getElementById('liq-svg');
-  if (!days.length) {
-    svg.innerHTML = '<text x="50%" y="70" font-size="11" fill="#3a4f6a" text-anchor="middle">Ingen data</text>';
-    return;
-  }
+  if (!days.length) { svg.innerHTML = '<text x="50%" y="70" font-size="11" fill="#3a4f6a" text-anchor="middle">Ingen data</text>'; return; }
 
-  const W = svg.clientWidth || 800;
-  const H = 120;
-  const PAD = { top: 10, right: 20, bottom: 30, left: 55 };
-  const innerW = W - PAD.left - PAD.right;
-  const innerH = H - PAD.top - PAD.bottom;
-
+  const W = svg.clientWidth || 800, H = 120;
+  const PAD = { top:10, right:20, bottom:30, left:55 };
+  const iW = W - PAD.left - PAD.right, iH = H - PAD.top - PAD.bottom;
   const balances = days.map(d => d.balance);
-  const minB = Math.min(...balances);
-  const maxB = Math.max(...balances);
+  const minB = Math.min(...balances), maxB = Math.max(...balances);
   const range = maxB - minB || 1;
 
-  // Nuværende saldo
-  const latest = days[days.length - 1];
-  document.getElementById('liq-current').textContent = fmt(latest.balance);
+  document.getElementById('liq-current').textContent = fmt(days[days.length-1].balance);
 
-  function toX(i) { return PAD.left + (i / (days.length - 1)) * innerW; }
-  function toY(v) { return PAD.top + innerH - ((v - minB) / range) * innerH; }
+  const toX = i => PAD.left + (i/(days.length-1))*iW;
+  const toY = v => PAD.top + iH - ((v-minB)/range)*iH;
+  const pts = days.map((d,i) => `${toX(i)},${toY(d.balance)}`).join(' ');
+  const area = `${toX(0)},${toY(minB)} ${pts} ${toX(days.length-1)},${toY(minB)}`;
 
-  const pts = days.map((d, i) => `${toX(i)},${toY(d.balance)}`).join(' ');
-  const areapts = `${toX(0)},${toY(minB)} ` + pts + ` ${toX(days.length-1)},${toY(minB)}`;
-
-  // Gridlinjer + Y-labels
   let out = `<defs>
     <linearGradient id="liqFill" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#00ff9d" stop-opacity=".2"/>
       <stop offset="100%" stop-color="#00ff9d" stop-opacity="0"/>
     </linearGradient>
-    <clipPath id="liqClip"><rect x="${PAD.left}" y="${PAD.top}" width="${innerW}" height="${innerH}"/></clipPath>
+    <clipPath id="liqClip"><rect x="${PAD.left}" y="${PAD.top}" width="${iW}" height="${iH}"/></clipPath>
   </defs>`;
 
-  // 4 gridlinjer
-  for (let i = 0; i <= 3; i++) {
-    const v = minB + (range / 3) * i;
+  for (let i=0; i<=3; i++) {
+    const v = minB + (range/3)*i;
     const y = toY(v);
-    out += `<line x1="${PAD.left}" y1="${y}" x2="${PAD.left + innerW}" y2="${y}" stroke="#1e2d45" stroke-width=".5"/>`;
-    out += `<text x="${PAD.left - 6}" y="${y + 4}" font-size="9" fill="#3a4f6a" text-anchor="end">${fmtShort(v)}</text>`;
+    out += `<line x1="${PAD.left}" y1="${y}" x2="${PAD.left+iW}" y2="${y}" stroke="#1e2d45" stroke-width=".5"/>`;
+    out += `<text x="${PAD.left-6}" y="${y+4}" font-size="9" fill="#3a4f6a" text-anchor="end">${fmtShort(v)}</text>`;
   }
 
-  // Areal + linje
-  out += `<polygon points="${areapts}" fill="url(#liqFill)" clip-path="url(#liqClip)"/>`;
+  out += `<polygon points="${area}" fill="url(#liqFill)" clip-path="url(#liqClip)"/>`;
   out += `<polyline points="${pts}" fill="none" stroke="#00ff9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#liqClip)"/>`;
 
-  // Dagens punkt
-  const lx = toX(days.length - 1);
-  const ly = toY(latest.balance);
+  const lx = toX(days.length-1), ly = toY(days[days.length-1].balance);
   out += `<circle cx="${lx}" cy="${ly}" r="5" fill="#00ff9d" stroke="#0b0f1a" stroke-width="2"/>`;
 
-  // X-labels — vis 1. i hver måned
   let lastMonth = '';
-  days.forEach((d, i) => {
-    const mo = d.date.substring(0, 7);
+  days.forEach((d,i) => {
+    const mo = d.date.substring(0,7);
     if (mo !== lastMonth) {
       lastMonth = mo;
       const x = toX(i);
       const label = new Date(d.date).toLocaleDateString('da-DK', {day:'numeric', month:'short'});
       out += `<text x="${x}" y="${H}" font-size="9" fill="#5a6a82" text-anchor="middle">${label}</text>`;
-      out += `<line x1="${x}" y1="${PAD.top}" x2="${x}" y2="${PAD.top + innerH}" stroke="#1e2d45" stroke-width=".5" stroke-dasharray="3,3"/>`;
+      out += `<line x1="${x}" y1="${PAD.top}" x2="${x}" y2="${PAD.top+iH}" stroke="#1e2d45" stroke-width=".5" stroke-dasharray="3,3"/>`;
     }
   });
 
-  // Interaktivt overlay
-  out += `<rect x="${PAD.left}" y="${PAD.top}" width="${innerW}" height="${innerH}" fill="transparent" id="liq-overlay"/>`;
-
+  out += `<rect x="${PAD.left}" y="${PAD.top}" width="${iW}" height="${iH}" fill="transparent" id="liq-overlay"/>`;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.innerHTML = out;
 
-  // Tooltip via mousemove
   document.getElementById('liq-overlay').addEventListener('mousemove', e => {
     const rect = svg.getBoundingClientRect();
     const mx = e.clientX - rect.left - PAD.left;
-    const idx = Math.round((mx / innerW) * (days.length - 1));
+    const idx = Math.round((mx/iW)*(days.length-1));
     if (idx < 0 || idx >= days.length) return;
     const d = days[idx];
     const tooltip = document.getElementById('liq-tooltip');
-    const dateLabel = new Date(d.date).toLocaleDateString('da-DK', {day:'numeric', month:'long', year:'numeric'});
-    document.getElementById('liq-tooltip-date').textContent = dateLabel;
+    document.getElementById('liq-tooltip-date').textContent = new Date(d.date).toLocaleDateString('da-DK', {day:'numeric', month:'long', year:'numeric'});
     document.getElementById('liq-tooltip-val').textContent = fmt(d.balance);
     tooltip.style.display = 'block';
     tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
@@ -580,7 +561,6 @@ function renderLiquidityChart(days) {
   });
 }
 
-// ─── FAKTURAER ────────────────────────────────────────────
 async function loadFakturaer(page=1) {
   const res = await fetch(`/api/invoices/booked?page=${page}`);
   const data = await res.json();

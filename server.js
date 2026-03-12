@@ -41,30 +41,34 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
-// ─── TEST: se rå entries for regnskabsåret ────────────────
-app.get('/api/test-journal', async (req, res) => {
+// ─── DEBUG: SE HVAD E-CONOMIC TILBYDER ───────────────────
+app.get('/api/test-root', async (req, res) => {
   try {
-    // Først hent accounting years
-    const ayRes = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
-    const ayData = await ayRes.json();
-    const years = ayData.collection || [];
-
-    // Find det år der matcher 2026 (eller seneste)
-    const target = years.find(y => y.year === '2026') || years[years.length - 1];
-    if (!target) return res.json({ error: 'Ingen regnskabsår fundet', years });
-
-    // Hent 5 entries fra det år
-    const eRes = await fetch(`${target.entries}?pagesize=5`, { headers: HEADERS });
-    const eData = await eRes.json();
-    res.json({ accountingYear: target.year, entries: eData.collection || [], raw: eData });
+    const r = await fetch(`${BASE}`, { headers: HEADERS });
+    const d = await r.json();
+    res.json(d);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// ─── HENT ALLE BOGFØRTE POSTERINGER FOR ET ÅR ────────────
+app.get('/api/test-journal', async (req, res) => {
+  try {
+    const ayRes = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
+    const ayData = await ayRes.json();
+    const years = ayData.collection || [];
+    const target = years.find(y => y.year === '2026') || years[years.length - 1];
+    if (!target) return res.json({ error: 'Ingen regnskabsår fundet', years });
+    const eRes = await fetch(`${target.entries}?pagesize=3`, { headers: HEADERS });
+    const eData = await eRes.json();
+    res.json({ accountingYear: target.year, entriesUrl: target.entries, sample: eData.collection || [], raw: eData });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── HENT ENTRIES VIA ACCOUNTING-YEARS ───────────────────
 async function fetchEntriesForYear(year) {
-  // Find accounting year der matcher
   const ayRes = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
   const ayData = await ayRes.json();
   const years = ayData.collection || [];
@@ -82,16 +86,14 @@ async function fetchEntriesForYear(year) {
   return all;
 }
 
-// Hent entries på tværs af år (til likviditet)
 async function fetchEntriesForPeriod(fromDate, toDate) {
   const ayRes = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
   const ayData = await ayRes.json();
   const years = ayData.collection || [];
 
-  // Find relevante regnskabsår der overlapper perioden
-  const relevant = years.filter(y => {
-    return new Date(y.toDate) >= new Date(fromDate) && new Date(y.fromDate) <= new Date(toDate);
-  });
+  const relevant = years.filter(y =>
+    new Date(y.toDate) >= new Date(fromDate) && new Date(y.fromDate) <= new Date(toDate)
+  );
 
   let all = [];
   for (const ay of relevant) {
@@ -139,24 +141,20 @@ app.get('/api/liquidity', async (req, res) => {
   try {
     const today = new Date();
     const from = new Date(today);
-    from.setDate(today.getDate() - 180); // hent 180 dage bagud for at have primo
+    from.setDate(today.getDate() - 180);
     const fromStr = from.toISOString().split('T')[0];
     const toStr   = today.toISOString().split('T')[0];
 
     const all = await fetchEntriesForPeriod(fromStr, toStr);
-
-    // Filtrer kun bankkonto 6750
     const bankEntries = all.filter(e => (e.account?.accountNumber || 0) === BANK_ACCOUNT);
     bankEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Byg daglig akkumuleret saldo
     const dailyMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
       dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
     });
 
-    // Lav kumulativ saldo
     const allDates = Object.keys(dailyMap).sort();
     let running = 0;
     const cumulMap = {};
@@ -165,11 +163,9 @@ app.get('/api/liquidity', async (req, res) => {
       cumulMap[d] = running;
     });
 
-    // Generer 90 dage bagud
     const cutoff = new Date(today);
     cutoff.setDate(today.getDate() - 90);
 
-    // Find primo saldo (seneste kendte saldo inden cutoff)
     let primoBalance = 0;
     allDates.forEach(d => {
       if (new Date(d) <= cutoff) primoBalance = cumulMap[d];
@@ -236,6 +232,7 @@ app.get('/api/revenue', async (req, res) => {
   }
 });
 
+// ─── FAKTURAER, KUNDER, PRODUKTER, ORDRER ────────────────
 app.get('/api/invoices/booked', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;

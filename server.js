@@ -57,7 +57,6 @@ app.get('/api/summary', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── TEST ENDPOINTS ───────────────────────────────────────
 app.get('/api/test-journal', async (req, res) => {
   try {
     const r = await fetch(`${BASE}/journals/entries/booked?pagesize=5`, { headers: HEADERS });
@@ -74,7 +73,6 @@ app.get('/api/test-accounts', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── HENT FINANSPOSTER ────────────────────────────────────
 async function fetchJournalEntries(year) {
   const from = `${year}-01-01`;
   const to   = `${year}-12-31`;
@@ -126,28 +124,66 @@ function sumCategory(entries, range, month) {
     .reduce((sum, e) => sum + (e.amount || 0), 0);
 }
 
-// Banksaldo ved udgangen af hver måned (akkumuleret)
-function bankBalancePerMonth(entries, year) {
-  // Primo saldo: alle posteringer FØR dette år
-  // Vi bruger kun posteringer inden for året og akkumulerer måned for måned
-  const monthly = Array(12).fill(0);
-  entries.forEach(e => {
-    if (e.account?.accountNumber !== BANK_ACCOUNT) return;
-    const m = new Date(e.date).getMonth(); // 0-indexed
-    monthly[m] += e.amount || 0;
-  });
+// ─── DAGLIG BANKSALDO ─────────────────────────────────────
+app.get('/api/liquidity', async (req, res) => {
+  try {
+    // Hent alle posteringer på konto 6750 — vi går 1 år tilbage for at få primo
+    const today = new Date();
+    const fromDate = new Date(today);
+    fromDate.setFullYear(today.getFullYear() - 1);
+    const from = fromDate.toISOString().split('T')[0];
+    const to   = today.toISOString().split('T')[0];
 
-  // Akkumuler: saldo ved udgangen af hver måned
-  const balances = [];
-  let running = 0;
-  for (let i = 0; i < 12; i++) {
-    running += monthly[i];
-    balances.push(running);
-  }
-  return balances;
-}
+    let all = [];
+    let page = 1;
+    while (true) {
+      const r = await fetch(
+        `${BASE}/journals/entries/booked?filter=date$gte:${from}$and:date$lte:${to}$and:account.accountNumber$eq:${BANK_ACCOUNT}&pagesize=200&skippages=${page-1}`,
+        { headers: HEADERS }
+      );
+      const d = await r.json();
+      const items = d.collection || [];
+      all = all.concat(items);
+      if (items.length < 200) break;
+      page++;
+    }
 
-// ─── REVENUE + P/L + LIKVIDITET ───────────────────────────
+    // Sorter efter dato
+    all.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Byg daglig saldo — akkumuleret fra første postering
+    const dailyMap = {};
+    let running = 0;
+    all.forEach(e => {
+      const day = e.date.split('T')[0];
+      running += e.amount || 0;
+      dailyMap[day] = running;
+    });
+
+    // Generer alle dage de sidste 90 dage med saldo
+    const days = [];
+    const cutoff = new Date(today);
+    cutoff.setDate(today.getDate() - 90);
+
+    // Find saldo på cutoff-datoen (primo for 90 dage)
+    let primoBalance = 0;
+    Object.entries(dailyMap).forEach(([date, bal]) => {
+      if (new Date(date) <= cutoff) primoBalance = bal;
+    });
+
+    // Byg array af de 90 dage
+    let lastKnown = primoBalance;
+    for (let d = new Date(cutoff); d <= today; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      if (dailyMap[dateStr] !== undefined) lastKnown = dailyMap[dateStr];
+      days.push({ date: dateStr, balance: lastKnown });
+    }
+
+    res.json({ days });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── REVENUE + P/L ────────────────────────────────────────
 app.get('/api/revenue', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
@@ -156,9 +192,6 @@ app.get('/api/revenue', async (req, res) => {
       fetchJournalEntries(year),
       fetchAllInvoices(year)
     ]);
-
-    // Banksaldo pr. måned (udgangen af måneden, relativt til årets start)
-    const bankBalances = bankBalancePerMonth(entries, year);
 
     const months = Array.from({length: 12}, (_, i) => {
       const m = i + 1;
@@ -173,19 +206,12 @@ app.get('/api/revenue', async (req, res) => {
       const otherOpex    = sumCategory(entries, PL_MAP.salesCosts, m) + sumCategory(entries, PL_MAP.carCosts, m) + sumCategory(entries, PL_MAP.adminCosts, m);
       const depreciation = sumCategory(entries, PL_MAP.depreciation, m);
       const interest     = sumCategory(entries, PL_MAP.interestCosts, m) + sumCategory(entries, PL_MAP.interestIncome, m);
-      const cashflow     = bankBalances[i]; // Banksaldo ved udgangen af måneden
       const customerSet  = new Set(monthInvoices.map(inv => inv.customer?.customerNumber).filter(Boolean));
 
       return {
         month: m,
         revenue: totalRevenue,
-        cogs,
-        salaries,
-        rent,
-        otherOpex,
-        depreciation,
-        interest,
-        cashflow,
+        cogs, salaries, rent, otherOpex, depreciation, interest,
         customers: customerSet.size,
         _cids: [...customerSet]
       };
@@ -205,10 +231,7 @@ app.get('/api/revenue', async (req, res) => {
 app.get('/api/invoices/booked', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const r = await fetch(
-      `${BASE}/invoices/booked?pagesize=50&skippages=${page-1}&sort=bookedInvoiceNumber$desc`,
-      { headers: HEADERS }
-    );
+    const r = await fetch(`${BASE}/invoices/booked?pagesize=50&skippages=${page-1}&sort=bookedInvoiceNumber$desc`, { headers: HEADERS });
     const d = await r.json();
     res.json({ invoices: d.collection || [], pageCount: Math.ceil((d.pagination?.results || 0) / 50) });
   } catch (e) { res.status(500).json({ error: e.message }); }

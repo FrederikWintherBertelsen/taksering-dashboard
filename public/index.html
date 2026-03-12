@@ -10,7 +10,6 @@
 :root { --bg:#0b0f1a; --surface:#111827; --border:#1e2d45; --accent:#00d4ff; --green:#00ff9d; --warn:#ff6b35; --text:#e8edf5; --muted:#5a6a82; --card:#131c2e; }
 body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; font-size:13px; }
 
-/* LOGIN */
 #login-screen { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:100; }
 .login-box { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px; width:320px; text-align:center; }
 .login-box h2 { font-family:'Syne',sans-serif; font-size:22px; color:var(--accent); margin-bottom:8px; }
@@ -21,7 +20,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
 .login-box button:hover { opacity:.85; }
 .login-error { color:var(--warn); font-size:11px; margin-top:8px; display:none; }
 
-/* TOPBAR */
 .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px; height:56px; display:flex; align-items:center; justify-content:space-between; }
 .logo { font-family:'Syne',sans-serif; font-size:17px; font-weight:800; color:var(--accent); }
 .topbar-right { display:flex; align-items:center; gap:16px; color:var(--muted); font-size:12px; }
@@ -30,18 +28,15 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
 .logout-btn { border:1px solid var(--border); border-radius:5px; padding:4px 10px; cursor:pointer; }
 .logout-btn:hover { border-color:var(--warn); color:var(--warn); }
 
-/* TABS */
 .tabs { background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px; display:flex; gap:2px; overflow-x:auto; }
 .tab { padding:12px 16px; font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; }
 .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
 .tab:hover { color:var(--text); }
 
-/* VIEWS */
 .view { display:none; }
 .view.active { display:block; }
 .main { padding:24px; max-width:1400px; margin:0 auto; }
 
-/* MÅNEDSVÆLGER */
 .month-picker { display:flex; align-items:center; gap:10px; margin-bottom:24px; flex-wrap:wrap; }
 .year-btn { background:var(--card); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px 16px; font-family:'DM Mono',monospace; font-size:13px; cursor:pointer; }
 .year-btn.active { border-color:var(--accent); color:var(--accent); }
@@ -49,7 +44,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
 .month-btn.active { background:var(--accent); color:#000; border-color:var(--accent); font-weight:bold; }
 .month-btn:hover { border-color:var(--accent); color:var(--accent); }
 
-/* STAT KORT */
 .stats { display:grid; gap:14px; margin-bottom:20px; }
 .stat { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 20px; position:relative; overflow:hidden; }
 .stat::before { content:''; position:absolute; top:0;left:0;right:0;height:2px; }
@@ -61,23 +55,19 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
 .stat-val.green { color:var(--green); }
 .stat-sub { font-size:11px; color:var(--muted); margin-top:5px; }
 .stat-sub.up { color:var(--green); }
+.stat-sub.down { color:var(--warn); }
 
-/* GRID */
 .grid-2 { display:grid; grid-template-columns:1fr 1.6fr; gap:16px; margin-bottom:16px; }
-
-/* CARD */
 .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
 .card-title { font-family:'Syne',sans-serif; font-size:14px; font-weight:700; margin-bottom:16px; }
 .card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
 
-/* BARS */
 .bars { display:flex; align-items:flex-end; gap:5px; height:120px; }
 .bar-wrap { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:5px; height:100%; }
 .bar { width:100%; border-radius:3px 3px 0 0; }
 .bar-label { font-size:8px; color:var(--muted); }
 .bar-label.active { color:var(--accent); }
 
-/* P/L TABLE */
 .pl { width:100%; border-collapse:collapse; font-size:11px; }
 .pl tr:hover td { background:rgba(255,255,255,.02); }
 .pl td { padding:5px 4px; border-bottom:1px solid #0f1825; }
@@ -93,7 +83,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
 .pl-divider td { border-top:1px solid #1e2d45 !important; border-bottom:1px solid #1e2d45 !important; padding-top:6px !important; padding-bottom:6px !important; }
 .pl-final td { border-top:2px solid #1e3a55 !important; padding-top:8px !important; }
 
-/* FAKTURAER / TABELLER */
 .tbl { width:100%; border-collapse:collapse; font-size:12px; }
 .tbl th { text-align:left; padding:10px 12px; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--border); font-weight:400; }
 .tbl td { padding:10px 12px; border-bottom:1px solid #0f1825; }
@@ -106,20 +95,22 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
 
 .search-bar { background:#0d1520; border:1px solid var(--border); border-radius:8px; padding:8px 14px; color:var(--text); font-family:'DM Mono',monospace; font-size:12px; width:100%; max-width:300px; outline:none; margin-bottom:16px; }
 .search-bar:focus { border-color:var(--accent); }
-
 .loading { text-align:center; padding:40px; color:var(--muted); }
-.error-msg { color:var(--warn); text-align:center; padding:20px; }
 
-/* PAGINATION */
 .pagination { display:flex; align-items:center; gap:8px; margin-top:16px; }
 .page-btn { background:var(--card); border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:5px 12px; font-size:11px; cursor:pointer; }
 .page-btn:hover, .page-btn.active { border-color:var(--accent); color:var(--accent); }
 .page-info { color:var(--muted); font-size:11px; }
+
+/* TOOLTIP */
+.liq-tooltip { position:absolute; background:#1a2840; border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:11px; pointer-events:none; display:none; z-index:10; }
+.liq-tooltip-date { color:var(--muted); margin-bottom:3px; }
+.liq-tooltip-val { font-family:'Syne',sans-serif; font-weight:800; color:var(--green); font-size:14px; }
+.liq-wrap { position:relative; }
 </style>
 </head>
 <body>
 
-<!-- LOGIN -->
 <div id="login-screen">
   <div class="login-box">
     <h2>⬡ Takseringshjælp</h2>
@@ -130,9 +121,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
   </div>
 </div>
 
-<!-- APP -->
 <div id="app" style="display:none">
-
   <div class="topbar">
     <div class="logo">⬡ Takseringshjælp</div>
     <div class="topbar-right">
@@ -155,7 +144,8 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
   <!-- OVERSIGT -->
   <div id="view-oversigt" class="view active">
     <div class="main">
-      <div class="month-picker" id="month-picker">
+
+      <div class="month-picker">
         <button class="year-btn" onclick="setYear(2024)" id="yr-2024">2024</button>
         <button class="year-btn" onclick="setYear(2025)" id="yr-2025">2025</button>
         <button class="year-btn active" onclick="setYear(2026)" id="yr-2026">2026</button>
@@ -178,7 +168,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
         <div class="stat blue">
           <div class="stat-label" id="stat-label-month">Omsætning</div>
           <div class="stat-val blue" id="stat-month">—</div>
-          <div class="stat-sub up" id="stat-month-sub"></div>
+          <div class="stat-sub" id="stat-month-sub"></div>
         </div>
         <div class="stat green">
           <div class="stat-label" id="stat-label-ytd">Årets total</div>
@@ -223,15 +213,24 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
         </div>
       </div>
 
-      <div class="card" style="margin-top:0">
+      <!-- LIKVIDITET DAGLIG -->
+      <div class="card">
         <div class="card-header">
-          <div class="card-title" style="margin:0">Likviditet</div>
-          <div style="font-size:11px;color:var(--muted)">Akkumuleret netto cashflow</div>
+          <div>
+            <div class="card-title" style="margin:0">Likviditet — Banksaldo</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">Konto 6750 · Sidste 90 dage · Daglig saldo</div>
+          </div>
+          <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--green)" id="liq-current">—</div>
         </div>
-        <svg id="liq-svg" viewBox="0 0 700 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100px;overflow:visible;margin-top:12px">
-          <text x="350" y="50" font-size="10" fill="#3a4f6a" text-anchor="middle">Henter data...</text>
-        </svg>
+        <div class="liq-wrap">
+          <div class="liq-tooltip" id="liq-tooltip">
+            <div class="liq-tooltip-date" id="liq-tooltip-date"></div>
+            <div class="liq-tooltip-val" id="liq-tooltip-val"></div>
+          </div>
+          <svg id="liq-svg" style="width:100%;height:140px;overflow:visible;display:block"></svg>
+        </div>
       </div>
+
     </div>
   </div>
 
@@ -284,7 +283,6 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
       <div class="card"><div id="ordrer-content"><div class="loading">Henter ordrer...</div></div></div>
     </div>
   </div>
-
 </div>
 
 <script>
@@ -346,7 +344,6 @@ function setMonth(m) {
   document.getElementById('mo-' + m).classList.add('active');
   loadOversigt();
 }
-
 document.getElementById('mo-' + selectedMonth).classList.add('active');
 
 function fmt(n) {
@@ -369,7 +366,10 @@ function filterTable(tblId, query) {
   });
 }
 
-function initDashboard() { loadOversigt(); }
+function initDashboard() {
+  loadOversigt();
+  loadLiquidity();
+}
 
 async function loadOversigt() {
   try {
@@ -379,8 +379,15 @@ async function loadOversigt() {
     renderRevenueChart();
     renderStats();
     renderPL();
-    renderLiquidityChart();
     renderCustomerChart();
+  } catch(e) { console.error(e); }
+}
+
+async function loadLiquidity() {
+  try {
+    const res = await fetch('/api/liquidity');
+    const data = await res.json();
+    renderLiquidityChart(data.days || []);
   } catch(e) { console.error(e); }
 }
 
@@ -427,7 +434,7 @@ function renderCustomerChart() {
   const lk = kp[kp.length-1];
   let svg = `<defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00ff9d" stop-opacity=".2"/><stop offset="100%" stop-color="#00ff9d" stop-opacity="0"/></linearGradient></defs>`;
   [0,1,2,3].forEach(i => { svg += `<line x1="0" y1="${5+i*18}" x2="300" y2="${5+i*18}" stroke="#1e2d45" stroke-width=".5"/>`; });
-  if (kp.length > 1) { svg += `<polygon points="${kp.map(p=>`${p.x},${p.y}`).join(' ')} ${lk.x},70 ${kp[0].x},70" fill="url(#cg)"/>`; }
+  if (kp.length > 1) svg += `<polygon points="${kp.map(p=>`${p.x},${p.y}`).join(' ')} ${lk.x},70 ${kp[0].x},70" fill="url(#cg)"/>`;
   if (lk) svg += `<line x1="${lk.x}" y1="${lk.y}" x2="300" y2="${lk.y}" stroke="#00ff9d" stroke-width="1.5" stroke-dasharray="4,3" opacity=".25"/>`;
   if (kp.length > 1) svg += `<polyline points="${kp.map(p=>`${p.x},${p.y}`).join(' ')}" fill="none" stroke="#00ff9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
   kp.forEach(p => {
@@ -479,42 +486,102 @@ function renderPL() {
   </table>`;
 }
 
-function renderLiquidityChart() {
-  const known = revenueData.filter(m => m.month <= selectedMonth && m.cashflow != null);
-  if (known.length === 0) { document.getElementById('liq-svg').innerHTML = '<text x="350" y="50" font-size="10" fill="#3a4f6a" text-anchor="middle">Ingen likviditetsdata</text>'; return; }
-  let acc = 0;
-  const points = revenueData.map((m, i) => {
-    const x = 40 + i * 60;
-    if (m.month <= selectedMonth && m.cashflow != null) { acc += m.cashflow; return { x, val: acc, known: true, m }; }
-    return { x, val: acc, known: false, m };
+// ─── DAGLIG LIKVIDITETSGRAF ───────────────────────────────
+function renderLiquidityChart(days) {
+  const svg = document.getElementById('liq-svg');
+  if (!days.length) {
+    svg.innerHTML = '<text x="50%" y="70" font-size="11" fill="#3a4f6a" text-anchor="middle">Ingen data</text>';
+    return;
+  }
+
+  const W = svg.clientWidth || 800;
+  const H = 120;
+  const PAD = { top: 10, right: 20, bottom: 30, left: 55 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+
+  const balances = days.map(d => d.balance);
+  const minB = Math.min(...balances);
+  const maxB = Math.max(...balances);
+  const range = maxB - minB || 1;
+
+  // Nuværende saldo
+  const latest = days[days.length - 1];
+  document.getElementById('liq-current').textContent = fmt(latest.balance);
+
+  function toX(i) { return PAD.left + (i / (days.length - 1)) * innerW; }
+  function toY(v) { return PAD.top + innerH - ((v - minB) / range) * innerH; }
+
+  const pts = days.map((d, i) => `${toX(i)},${toY(d.balance)}`).join(' ');
+  const areapts = `${toX(0)},${toY(minB)} ` + pts + ` ${toX(days.length-1)},${toY(minB)}`;
+
+  // Gridlinjer + Y-labels
+  let out = `<defs>
+    <linearGradient id="liqFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#00ff9d" stop-opacity=".2"/>
+      <stop offset="100%" stop-color="#00ff9d" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="liqClip"><rect x="${PAD.left}" y="${PAD.top}" width="${innerW}" height="${innerH}"/></clipPath>
+  </defs>`;
+
+  // 4 gridlinjer
+  for (let i = 0; i <= 3; i++) {
+    const v = minB + (range / 3) * i;
+    const y = toY(v);
+    out += `<line x1="${PAD.left}" y1="${y}" x2="${PAD.left + innerW}" y2="${y}" stroke="#1e2d45" stroke-width=".5"/>`;
+    out += `<text x="${PAD.left - 6}" y="${y + 4}" font-size="9" fill="#3a4f6a" text-anchor="end">${fmtShort(v)}</text>`;
+  }
+
+  // Areal + linje
+  out += `<polygon points="${areapts}" fill="url(#liqFill)" clip-path="url(#liqClip)"/>`;
+  out += `<polyline points="${pts}" fill="none" stroke="#00ff9d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" clip-path="url(#liqClip)"/>`;
+
+  // Dagens punkt
+  const lx = toX(days.length - 1);
+  const ly = toY(latest.balance);
+  out += `<circle cx="${lx}" cy="${ly}" r="5" fill="#00ff9d" stroke="#0b0f1a" stroke-width="2"/>`;
+
+  // X-labels — vis 1. i hver måned
+  let lastMonth = '';
+  days.forEach((d, i) => {
+    const mo = d.date.substring(0, 7);
+    if (mo !== lastMonth) {
+      lastMonth = mo;
+      const x = toX(i);
+      const label = new Date(d.date).toLocaleDateString('da-DK', {day:'numeric', month:'short'});
+      out += `<text x="${x}" y="${H}" font-size="9" fill="#5a6a82" text-anchor="middle">${label}</text>`;
+      out += `<line x1="${x}" y1="${PAD.top}" x2="${x}" y2="${PAD.top + innerH}" stroke="#1e2d45" stroke-width=".5" stroke-dasharray="3,3"/>`;
+    }
   });
-  const maxVal = Math.max(...points.map(p => p.val), 1);
-  function toY(v) { return 74 - (v / maxVal) * 64; }
-  const kp = points.filter(p => p.known);
-  const lk = kp[kp.length-1];
-  let svg = `<defs><linearGradient id="liqG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00ff9d" stop-opacity=".25"/><stop offset="100%" stop-color="#00ff9d" stop-opacity="0"/></linearGradient></defs>`;
-  [10,42,74].forEach(y => { svg += `<line x1="0" y1="${y}" x2="700" y2="${y}" stroke="#1e2d45" stroke-width=".5"/>`; });
-  svg += `<text x="0" y="9" font-size="8" fill="#3a4f6a">${fmtShort(maxVal)}</text>`;
-  svg += `<text x="0" y="41" font-size="8" fill="#3a4f6a">${fmtShort(maxVal/2)}</text>`;
-  svg += `<text x="0" y="73" font-size="8" fill="#3a4f6a">0</text>`;
-  if (kp.length > 0) { svg += `<polygon points="${kp.map(p=>`${p.x},${toY(p.val)}`).join(' ')} ${lk.x},74 ${kp[0].x},74" fill="url(#liqG)"/>`; }
-  if (lk) svg += `<line x1="${lk.x}" y1="${toY(lk.val)}" x2="700" y2="${toY(lk.val)}" stroke="#00ff9d" stroke-width="1.5" stroke-dasharray="5,4" opacity=".3"/>`;
-  if (kp.length > 1) svg += `<polyline points="${kp.map(p=>`${p.x},${toY(p.val)}`).join(' ')}" fill="none" stroke="#00ff9d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
-  kp.forEach(p => {
-    const y = toY(p.val); const isA = p.m.month === selectedMonth;
-    svg += isA ? `<circle cx="${p.x}" cy="${y}" r="5" fill="#00ff9d" stroke="#0b0f1a" stroke-width="1.5"/>` : `<circle cx="${p.x}" cy="${y}" r="4" fill="#0b0f1a" stroke="#00ff9d" stroke-width="2"/>`;
-    svg += `<text x="${p.x}" y="${y-8}" font-size="${isA?9:8}" fill="${isA?'#00ff9d':'#5a6a82'}" text-anchor="middle" ${isA?'font-weight="bold"':''}>${fmtShort(p.val)}</text>`;
+
+  // Interaktivt overlay
+  out += `<rect x="${PAD.left}" y="${PAD.top}" width="${innerW}" height="${innerH}" fill="transparent" id="liq-overlay"/>`;
+
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = out;
+
+  // Tooltip via mousemove
+  document.getElementById('liq-overlay').addEventListener('mousemove', e => {
+    const rect = svg.getBoundingClientRect();
+    const mx = e.clientX - rect.left - PAD.left;
+    const idx = Math.round((mx / innerW) * (days.length - 1));
+    if (idx < 0 || idx >= days.length) return;
+    const d = days[idx];
+    const tooltip = document.getElementById('liq-tooltip');
+    const dateLabel = new Date(d.date).toLocaleDateString('da-DK', {day:'numeric', month:'long', year:'numeric'});
+    document.getElementById('liq-tooltip-date').textContent = dateLabel;
+    document.getElementById('liq-tooltip-val').textContent = fmt(d.balance);
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+    tooltip.style.top  = (e.clientY - rect.top  - 40) + 'px';
   });
-  points.forEach(p => {
-    const col = p.m.month === selectedMonth ? '#00d4ff' : (p.known ? '#5a6a82' : '#2a3a4a');
-    svg += `<text x="${p.x}" y="90" font-size="${p.m.month===selectedMonth?8.5:8}" fill="${col}" text-anchor="middle">${monthNames[p.m.month]}</text>`;
+  document.getElementById('liq-overlay').addEventListener('mouseleave', () => {
+    document.getElementById('liq-tooltip').style.display = 'none';
   });
-  document.getElementById('liq-svg').innerHTML = svg;
 }
 
-let fakPage = 1;
+// ─── FAKTURAER ────────────────────────────────────────────
 async function loadFakturaer(page=1) {
-  fakPage = page;
   const res = await fetch(`/api/invoices/booked?page=${page}`);
   const data = await res.json();
   document.getElementById('fakturaer-content').dataset.loaded = '1';
@@ -542,9 +609,7 @@ function renderInvoiceTable(containerId, tblId, invoices, isDraft=false) {
   }).join('');
   document.getElementById(containerId).innerHTML = `<table class="tbl" id="${tblId}"><thead><tr><th>Nummer</th><th>Kunde</th><th>Dato</th><th>Forfald</th><th style="text-align:right">Beløb</th><th style="text-align:right">Udestående</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
-let kundePage = 1;
 async function loadKunder(page=1) {
-  kundePage = page;
   const res = await fetch(`/api/customers?page=${page}`);
   const data = await res.json();
   document.getElementById('kunder-content').dataset.loaded = '1';

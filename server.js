@@ -37,6 +37,16 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
+app.get('/api/test-journal', async (req, res) => {
+  try {
+    const r = await fetch(`${BASE}/accounting-years/2026/entries?pagesize=5&filter=account.accountNumber$gte:2740$and:account.accountNumber$lte:2811`, { headers: HEADERS });
+    const d = await r.json();
+    res.json(d);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 async function fetchAllEntries(year) {
   let all = [];
   let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;

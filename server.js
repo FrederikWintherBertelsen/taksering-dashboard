@@ -37,19 +37,48 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
-app.get('/api/test-journal', async (req, res) => {
+app.get('/api/test-pl', async (req, res) => {
   try {
-    // Test: hent de første 3 kladde-entries fra journal 1
-    const r = await fetch(`${BASE}/journals/1/entries?pagesize=3`, { headers: HEADERS });
-    const d = await r.json();
-    res.json(d);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+    const year = 2026;
+    const month = 2;
+
+    // Kun bogførte
+    let booked = [];
+    let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      booked = booked.concat(d.collection || []);
+      url = d.pagination?.nextPage || null;
+    }
+    booked = booked.filter(e => new Date(e.date).getMonth() + 1 === month);
+
+    // Kun kladder
+    let drafts = [];
+    const journalNums = [1, 2, 3, 8, 11, 12, 13];
+    for (const jNum of journalNums) {
+      let jUrl = `${BASE}/journals/${jNum}/entries?pagesize=1000&skippages=0`;
+      while (jUrl) {
+        const r = await fetch(jUrl, { headers: HEADERS });
+        const d = await r.json();
+        const entries = (d.collection || []).filter(e => e.date && new Date(e.date).getFullYear() === year && new Date(e.date).getMonth() + 1 === month);
+        drafts = drafts.concat(entries);
+        jUrl = d.pagination?.nextPage || null;
+      }
+    }
+
+    // Summer per kategori
+    const cats = Object.entries(PL_MAP).map(([name, range]) => {
+      const b = booked.filter(e => inRange(e.account?.accountNumber || 0, range)).reduce((s, e) => s + (e.amount || 0), 0);
+      const d = drafts.filter(e => inRange(e.account?.accountNumber || 0, range)).reduce((s, e) => s + (e.amount || 0), 0);
+      return { name, range: `${range.from}-${range.to}`, booked: Math.round(b), drafts: Math.round(d), combined: Math.round(b + d) };
+    });
+
+    res.json({ month: 'Februar 2026', bookedCount: booked.length, draftsCount: drafts.length, categories: cats });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 async function fetchAllEntries(year) {
-  // Bogførte entries
   let all = [];
   let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
   while (url) {
@@ -59,20 +88,18 @@ async function fetchAllEntries(year) {
     url = d.pagination?.nextPage || null;
   }
 
-  // Kladde entries fra alle journals
   const journalNums = [1, 2, 3, 8, 11, 12, 13];
   for (const jNum of journalNums) {
-    let url = `${BASE}/journals/${jNum}/entries?pagesize=1000&skippages=0`;
-    while (url) {
-      const r = await fetch(url, { headers: HEADERS });
+    let jUrl = `${BASE}/journals/${jNum}/entries?pagesize=1000&skippages=0`;
+    while (jUrl) {
+      const r = await fetch(jUrl, { headers: HEADERS });
       const d = await r.json();
       const entries = (d.collection || []).filter(e => {
         if (!e.date) return false;
-        const entryYear = new Date(e.date).getFullYear();
-        return entryYear === year;
+        return new Date(e.date).getFullYear() === year;
       });
       all = all.concat(entries);
-      url = d.pagination?.nextPage || null;
+      jUrl = d.pagination?.nextPage || null;
     }
   }
 

@@ -17,8 +17,7 @@ const HEADERS = {
   'X-AgreementGrantToken': GRANT,
   'Content-Type': 'application/json'
 };
-const BASE      = 'https://restapi.e-conomic.com';
-const BASE_OPEN = 'https://apis.e-conomic.com';
+const BASE = 'https://restapi.e-conomic.com';
 
 const BANK_ACCOUNT = 6750;
 
@@ -42,44 +41,67 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
-app.get('/api/summary', async (req, res) => {
-  try {
-    const [inv, cust, prod] = await Promise.all([
-      fetch(`${BASE}/invoices/booked?pagesize=1`, { headers: HEADERS }),
-      fetch(`${BASE}/customers?pagesize=1`, { headers: HEADERS }),
-      fetch(`${BASE}/products?pagesize=1`, { headers: HEADERS })
-    ]);
-    const [id, cd, pd] = await Promise.all([inv.json(), cust.json(), prod.json()]);
-    res.json({
-      invoiceCount:  id.pagination?.results || 0,
-      customerCount: cd.pagination?.results || 0,
-      productCount:  pd.pagination?.results || 0
-    });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ─── TEST ENDPOINTS ───────────────────────────────────────
+// ─── TEST: se rå entries for regnskabsåret ────────────────
 app.get('/api/test-journal', async (req, res) => {
   try {
-    const r = await fetch(`${BASE_OPEN}/bookedEntriesApi/booked-entries?pageSize=5`, { headers: HEADERS });
-    const d = await r.json();
-    res.json(d);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    // Først hent accounting years
+    const ayRes = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
+    const ayData = await ayRes.json();
+    const years = ayData.collection || [];
+
+    // Find det år der matcher 2026 (eller seneste)
+    const target = years.find(y => y.year === '2026') || years[years.length - 1];
+    if (!target) return res.json({ error: 'Ingen regnskabsår fundet', years });
+
+    // Hent 5 entries fra det år
+    const eRes = await fetch(`${target.entries}?pagesize=5`, { headers: HEADERS });
+    const eData = await eRes.json();
+    res.json({ accountingYear: target.year, entries: eData.collection || [], raw: eData });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// ─── HENT BOGFØRTE POSTERINGER ────────────────────────────
-async function fetchBookedEntries(fromDate, toDate) {
+// ─── HENT ALLE BOGFØRTE POSTERINGER FOR ET ÅR ────────────
+async function fetchEntriesForYear(year) {
+  // Find accounting year der matcher
+  const ayRes = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
+  const ayData = await ayRes.json();
+  const years = ayData.collection || [];
+  const target = years.find(y => y.year === String(year)) || years.find(y => y.year.startsWith(String(year)));
+  if (!target) return [];
+
   let all = [];
-  let cursor = null;
-  while (true) {
-    let url = `${BASE_OPEN}/bookedEntriesApi/booked-entries?pageSize=200&filter=date$gte:${fromDate}$and:date$lte:${toDate}`;
-    if (cursor) url += `&cursor=${cursor}`;
+  let url = `${target.entries}?pagesize=1000`;
+  while (url) {
     const r = await fetch(url, { headers: HEADERS });
     const d = await r.json();
-    const items = d.items || d.collection || [];
-    all = all.concat(items);
-    cursor = d.cursor || d.nextCursor || null;
-    if (!cursor || items.length < 200) break;
+    all = all.concat(d.collection || []);
+    url = d.pagination?.nextPage || null;
+  }
+  return all;
+}
+
+// Hent entries på tværs af år (til likviditet)
+async function fetchEntriesForPeriod(fromDate, toDate) {
+  const ayRes = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
+  const ayData = await ayRes.json();
+  const years = ayData.collection || [];
+
+  // Find relevante regnskabsår der overlapper perioden
+  const relevant = years.filter(y => {
+    return new Date(y.toDate) >= new Date(fromDate) && new Date(y.fromDate) <= new Date(toDate);
+  });
+
+  let all = [];
+  for (const ay of relevant) {
+    let url = `${ay.entries}?pagesize=1000&filter=date$gte:${fromDate}$and:date$lte:${toDate}`;
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      all = all.concat(d.collection || []);
+      url = d.pagination?.nextPage || null;
+    }
   }
   return all;
 }
@@ -88,17 +110,12 @@ async function fetchAllInvoices(year) {
   const from = `${year}-01-01`;
   const to   = `${year}-12-31`;
   let all = [];
-  let page = 1;
-  while (true) {
-    const r = await fetch(
-      `${BASE}/invoices/booked?filter=date$gte:${from}$and:date$lte:${to}&pagesize=200&skippages=${page-1}`,
-      { headers: HEADERS }
-    );
+  let url = `${BASE}/invoices/booked?filter=date$gte:${from}$and:date$lte:${to}&pagesize=1000`;
+  while (url) {
+    const r = await fetch(url, { headers: HEADERS });
     const d = await r.json();
-    const items = d.collection || [];
-    all = all.concat(items);
-    if (items.length < 200) break;
-    page++;
+    all = all.concat(d.collection || []);
+    url = d.pagination?.nextPage || null;
   }
   return all;
 }
@@ -111,10 +128,10 @@ function sumCategory(entries, range, month) {
   return entries
     .filter(e => {
       const m = new Date(e.date).getMonth() + 1;
-      const acc = e.account?.accountNumber || e.accountNumber || 0;
+      const acc = e.account?.accountNumber || 0;
       return m === month && inRange(acc, range);
     })
-    .reduce((sum, e) => sum + (e.amount || e.debitAmount || 0), 0);
+    .reduce((sum, e) => sum + (e.amount || 0), 0);
 }
 
 // ─── DAGLIG BANKSALDO ─────────────────────────────────────
@@ -122,48 +139,54 @@ app.get('/api/liquidity', async (req, res) => {
   try {
     const today = new Date();
     const from = new Date(today);
-    from.setFullYear(today.getFullYear() - 1);
+    from.setDate(today.getDate() - 180); // hent 180 dage bagud for at have primo
     const fromStr = from.toISOString().split('T')[0];
     const toStr   = today.toISOString().split('T')[0];
 
-    const all = await fetchBookedEntries(fromStr, toStr);
+    const all = await fetchEntriesForPeriod(fromStr, toStr);
 
     // Filtrer kun bankkonto 6750
-    const bankEntries = all.filter(e => {
-      const acc = e.account?.accountNumber || e.accountNumber || 0;
-      return acc === BANK_ACCOUNT;
-    });
-
+    const bankEntries = all.filter(e => (e.account?.accountNumber || 0) === BANK_ACCOUNT);
     bankEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     // Byg daglig akkumuleret saldo
     const dailyMap = {};
-    let running = 0;
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      running += e.amount || e.debitAmount || 0;
-      dailyMap[day] = running;
+      dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
     });
 
-    // Generer 90 dage
+    // Lav kumulativ saldo
+    const allDates = Object.keys(dailyMap).sort();
+    let running = 0;
+    const cumulMap = {};
+    allDates.forEach(d => {
+      running += dailyMap[d];
+      cumulMap[d] = running;
+    });
+
+    // Generer 90 dage bagud
     const cutoff = new Date(today);
     cutoff.setDate(today.getDate() - 90);
 
+    // Find primo saldo (seneste kendte saldo inden cutoff)
     let primoBalance = 0;
-    Object.entries(dailyMap).forEach(([date, bal]) => {
-      if (new Date(date) <= cutoff) primoBalance = bal;
+    allDates.forEach(d => {
+      if (new Date(d) <= cutoff) primoBalance = cumulMap[d];
     });
 
     const days = [];
     let lastKnown = primoBalance;
     for (let d = new Date(cutoff); d <= today; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toISOString().split('T')[0];
-      if (dailyMap[dateStr] !== undefined) lastKnown = dailyMap[dateStr];
+      if (cumulMap[dateStr] !== undefined) lastKnown = cumulMap[dateStr];
       days.push({ date: dateStr, balance: lastKnown });
     }
 
     res.json({ days });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─── REVENUE + P/L ────────────────────────────────────────
@@ -172,7 +195,7 @@ app.get('/api/revenue', async (req, res) => {
     const year = parseInt(req.query.year) || new Date().getFullYear();
 
     const [entries, invoices] = await Promise.all([
-      fetchBookedEntries(`${year}-01-01`, `${year}-12-31`),
+      fetchEntriesForYear(year),
       fetchAllInvoices(year)
     ]);
 
@@ -188,7 +211,7 @@ app.get('/api/revenue', async (req, res) => {
       const rent         = sumCategory(entries, PL_MAP.rent, m);
       const otherOpex    = sumCategory(entries, PL_MAP.salesCosts, m) + sumCategory(entries, PL_MAP.carCosts, m) + sumCategory(entries, PL_MAP.adminCosts, m);
       const depreciation = sumCategory(entries, PL_MAP.depreciation, m);
-      const interest     = sumCategory(entries, PL_MAP.interestCosts, m) + sumCategory(entries, PL_MAP.interestIncome, m);
+      const interest     = sumCategory(entries, PL_MAP.interestCosts, m) - sumCategory(entries, PL_MAP.interestIncome, m);
       const customerSet  = new Set(monthInvoices.map(inv => inv.customer?.customerNumber).filter(Boolean));
 
       return {
@@ -208,7 +231,9 @@ app.get('/api/revenue', async (req, res) => {
     });
 
     res.json({ year, months });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/invoices/booked', async (req, res) => {

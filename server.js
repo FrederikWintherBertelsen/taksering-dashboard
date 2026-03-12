@@ -20,18 +20,14 @@ const HEADERS = {
 const BASE = 'https://restapi.e-conomic.com';
 
 const PL_MAP = {
-  revenue:        { from: 1004, to: 1030 },
-  directPay:      { from: 1100, to: 1112 },
-  cogs:           { from: 1310, to: 1330 },
-  salaries:       { from: 2210, to: 2285 },
-  otherPersonnel: { from: 2440, to: 2440 },
-  salesCosts:     { from: 2740, to: 2811 },
-  carCosts:       { from: 3110, to: 3140 },
-  rent:           { from: 3410, to: 3450 },
-  adminCosts:     { from: 3600, to: 3790 },
-  depreciation:   { from: 3910, to: 3950 },
-  interestIncome: { from: 4310, to: 4381 },
-  interestCosts:  { from: 4410, to: 4481 },
+  revenue:      { from: 1004, to: 1030 },
+  directPay:    { from: 1100, to: 1112 },
+  cogs:         { from: 1310, to: 1330 },
+  salaries:     { from: 2210, to: 2285 },
+  salesCosts:   { from: 2740, to: 2811 },
+  rent:         { from: 3410, to: 3450 },
+  adminCosts:   { from: 3600, to: 3790 },
+  financial:    { from: 4310, to: 4481 },
 };
 
 const BANK_ACCOUNT = 6750;
@@ -84,18 +80,18 @@ app.get('/api/revenue', async (req, res) => {
     const seen = new Set();
     const months = Array.from({length: 12}, (_, i) => {
       const m = i + 1;
-      const revenue      = -(sumCat(entries, PL_MAP.revenue, m) + sumCat(entries, PL_MAP.directPay, m));
-      const cogs         = sumCat(entries, PL_MAP.cogs, m);
-      const salaries     = sumCat(entries, PL_MAP.salaries, m) + sumCat(entries, PL_MAP.otherPersonnel, m);
-      const rent         = sumCat(entries, PL_MAP.rent, m);
-      const otherOpex    = sumCat(entries, PL_MAP.salesCosts, m) + sumCat(entries, PL_MAP.carCosts, m) + sumCat(entries, PL_MAP.adminCosts, m);
-      const depreciation = sumCat(entries, PL_MAP.depreciation, m);
-      const interest     = sumCat(entries, PL_MAP.interestCosts, m) - sumCat(entries, PL_MAP.interestIncome, m);
-      const monthInv     = invoices.filter(inv => new Date(inv.date).getMonth() + 1 === m);
-      const cids         = [...new Set(monthInv.map(inv => inv.customer?.customerNumber).filter(Boolean))];
+      const revenue    = -(sumCat(entries, PL_MAP.revenue, m) + sumCat(entries, PL_MAP.directPay, m));
+      const cogs       = sumCat(entries, PL_MAP.cogs, m);
+      const salaries   = sumCat(entries, PL_MAP.salaries, m);
+      const salesCosts = sumCat(entries, PL_MAP.salesCosts, m);
+      const rent       = sumCat(entries, PL_MAP.rent, m);
+      const adminCosts = sumCat(entries, PL_MAP.adminCosts, m);
+      const financial  = sumCat(entries, PL_MAP.financial, m);
+      const monthInv   = invoices.filter(inv => new Date(inv.date).getMonth() + 1 === m);
+      const cids       = [...new Set(monthInv.map(inv => inv.customer?.customerNumber).filter(Boolean))];
       const newCustomers = cids.filter(c => !seen.has(c)).length;
       cids.forEach(c => seen.add(c));
-      return { month: m, revenue, cogs, salaries, rent, otherOpex, depreciation, interest, customers: cids.length, newCustomers };
+      return { month: m, revenue, cogs, salaries, salesCosts, rent, adminCosts, financial, customers: cids.length, newCustomers };
     });
 
     res.json({ year, months });
@@ -109,7 +105,6 @@ app.get('/api/liquidity', async (req, res) => {
     const from  = new Date(today); from.setDate(today.getDate() - 180);
     const fromStr = from.toISOString().split('T')[0];
 
-    // Hent entries fra relevante år
     const years = [...new Set([from.getFullYear(), today.getFullYear()])];
     let all = [];
     for (const y of years) all = all.concat(await fetchAllEntries(y));

@@ -39,9 +39,20 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/test-journal', async (req, res) => {
   try {
-    const r = await fetch(`${BASE}/accounting-years/2026/entries?pagesize=5&filter=account.accountNumber$gte:2740$and:account.accountNumber$lte:2811`, { headers: HEADERS });
-    const d = await r.json();
-    res.json(d);
+    let all = [];
+    let url = `${BASE}/accounting-years/2026/entries?pagesize=1000&skippages=0&filter=date$gte:2026-02-01$and:date$lte:2026-02-28`;
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      all = all.concat(d.collection || []);
+      url = d.pagination?.nextPage || null;
+    }
+    const salesEntries = all.filter(e => {
+      const acc = e.account?.accountNumber || 0;
+      return acc >= 2740 && acc <= 2811;
+    });
+    const total = salesEntries.reduce((s, e) => s + (e.amount || 0), 0);
+    res.json({ total, count: salesEntries.length, entries: salesEntries });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

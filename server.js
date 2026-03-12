@@ -24,9 +24,10 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
+// ─── TEST: hent rå entries fra 2026 og vis de første 3 ───
 app.get('/api/test-journal', async (req, res) => {
   try {
-    const r = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
+    const r = await fetch(`${BASE}/accounting-years/2026/entries?pagesize=3`, { headers: HEADERS });
     const d = await r.json();
     res.json(d);
   } catch (e) {
@@ -34,8 +35,37 @@ app.get('/api/test-journal', async (req, res) => {
   }
 });
 
+// ─── REVENUE: kun omsætning fra konto 1004-1030 ──────────
 app.get('/api/revenue', async (req, res) => {
-  res.json({ months: [] });
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+
+    let all = [];
+    let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000`;
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      all = all.concat(d.collection || []);
+      url = d.pagination?.nextPage || null;
+    }
+
+    const months = Array.from({length: 12}, (_, i) => {
+      const m = i + 1;
+      const revenue = all
+        .filter(e => {
+          const acc = e.account?.accountNumber || 0;
+          const mo  = new Date(e.date).getMonth() + 1;
+          return mo === m && acc >= 1004 && acc <= 1030;
+        })
+        .reduce((sum, e) => sum + (e.amount || 0), 0);
+
+      return { month: m, revenue: -revenue, cogs: 0, salaries: 0, rent: 0, otherOpex: 0, depreciation: 0, interest: 0, customers: 0, newCustomers: 0 };
+    });
+
+    res.json({ year, months });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/liquidity', async (req, res) => {

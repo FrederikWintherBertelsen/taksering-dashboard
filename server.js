@@ -19,6 +19,8 @@ const HEADERS = {
 };
 const BASE = 'https://restapi.e-conomic.com';
 
+const BANK_ACCOUNT = 6750;
+
 const PL_MAP = {
   revenue:        { from: 1004, to: 1030 },
   directPay:      { from: 1100, to: 1112 },
@@ -55,7 +57,7 @@ app.get('/api/summary', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── TEST ENDPOINT ────────────────────────────────────────
+// ─── TEST ENDPOINTS ───────────────────────────────────────
 app.get('/api/test-journal', async (req, res) => {
   try {
     const r = await fetch(`${BASE}/journals/entries/booked?pagesize=5`, { headers: HEADERS });
@@ -72,6 +74,7 @@ app.get('/api/test-accounts', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── HENT FINANSPOSTER ────────────────────────────────────
 async function fetchJournalEntries(year) {
   const from = `${year}-01-01`;
   const to   = `${year}-12-31`;
@@ -80,6 +83,25 @@ async function fetchJournalEntries(year) {
   while (true) {
     const r = await fetch(
       `${BASE}/journals/entries/booked?filter=date$gte:${from}$and:date$lte:${to}&pagesize=200&skippages=${page-1}`,
+      { headers: HEADERS }
+    );
+    const d = await r.json();
+    const items = d.collection || [];
+    all = all.concat(items);
+    if (items.length < 200) break;
+    page++;
+  }
+  return all;
+}
+
+async function fetchAllInvoices(year) {
+  const from = `${year}-01-01`;
+  const to   = `${year}-12-31`;
+  let all = [];
+  let page = 1;
+  while (true) {
+    const r = await fetch(
+      `${BASE}/invoices/booked?filter=date$gte:${from}$and:date$lte:${to}&pagesize=200&skippages=${page-1}`,
       { headers: HEADERS }
     );
     const d = await r.json();
@@ -104,6 +126,28 @@ function sumCategory(entries, range, month) {
     .reduce((sum, e) => sum + (e.amount || 0), 0);
 }
 
+// Banksaldo ved udgangen af hver måned (akkumuleret)
+function bankBalancePerMonth(entries, year) {
+  // Primo saldo: alle posteringer FØR dette år
+  // Vi bruger kun posteringer inden for året og akkumulerer måned for måned
+  const monthly = Array(12).fill(0);
+  entries.forEach(e => {
+    if (e.account?.accountNumber !== BANK_ACCOUNT) return;
+    const m = new Date(e.date).getMonth(); // 0-indexed
+    monthly[m] += e.amount || 0;
+  });
+
+  // Akkumuler: saldo ved udgangen af hver måned
+  const balances = [];
+  let running = 0;
+  for (let i = 0; i < 12; i++) {
+    running += monthly[i];
+    balances.push(running);
+  }
+  return balances;
+}
+
+// ─── REVENUE + P/L + LIKVIDITET ───────────────────────────
 app.get('/api/revenue', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
@@ -112,6 +156,9 @@ app.get('/api/revenue', async (req, res) => {
       fetchJournalEntries(year),
       fetchAllInvoices(year)
     ]);
+
+    // Banksaldo pr. måned (udgangen af måneden, relativt til årets start)
+    const bankBalances = bankBalancePerMonth(entries, year);
 
     const months = Array.from({length: 12}, (_, i) => {
       const m = i + 1;
@@ -125,11 +172,23 @@ app.get('/api/revenue', async (req, res) => {
       const rent         = sumCategory(entries, PL_MAP.rent, m);
       const otherOpex    = sumCategory(entries, PL_MAP.salesCosts, m) + sumCategory(entries, PL_MAP.carCosts, m) + sumCategory(entries, PL_MAP.adminCosts, m);
       const depreciation = sumCategory(entries, PL_MAP.depreciation, m);
-      const interest     = sumCategory(entries, PL_MAP.interestCosts, m) - (-sumCategory(entries, PL_MAP.interestIncome, m));
-      const cashflow     = monthInvoices.filter(inv => (inv.remainder||0) === 0).reduce((s,inv) => s + (inv.grossAmount||0), 0);
+      const interest     = sumCategory(entries, PL_MAP.interestCosts, m) + sumCategory(entries, PL_MAP.interestIncome, m);
+      const cashflow     = bankBalances[i]; // Banksaldo ved udgangen af måneden
       const customerSet  = new Set(monthInvoices.map(inv => inv.customer?.customerNumber).filter(Boolean));
 
-      return { month: m, revenue: totalRevenue, cogs, salaries, rent, otherOpex, depreciation, interest, cashflow, customers: customerSet.size, _cids: [...customerSet] };
+      return {
+        month: m,
+        revenue: totalRevenue,
+        cogs,
+        salaries,
+        rent,
+        otherOpex,
+        depreciation,
+        interest,
+        cashflow,
+        customers: customerSet.size,
+        _cids: [...customerSet]
+      };
     });
 
     const seen = new Set();
@@ -142,25 +201,6 @@ app.get('/api/revenue', async (req, res) => {
     res.json({ year, months });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
-async function fetchAllInvoices(year) {
-  const from = `${year}-01-01`;
-  const to   = `${year}-12-31`;
-  let all = [];
-  let page = 1;
-  while (true) {
-    const r = await fetch(
-      `${BASE}/invoices/booked?filter=date$gte:${from}$and:date$lte:${to}&pagesize=200&skippages=${page-1}`,
-      { headers: HEADERS }
-    );
-    const d = await r.json();
-    const items = d.collection || [];
-    all = all.concat(items);
-    if (items.length < 200) break;
-    page++;
-  }
-  return all;
-}
 
 app.get('/api/invoices/booked', async (req, res) => {
   try {

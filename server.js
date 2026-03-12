@@ -41,10 +41,10 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
-// ─── DEBUG: SE HVAD E-CONOMIC TILBYDER ───────────────────
-app.get('/api/test-root', async (req, res) => {
+// ─── TEST: se rå entries ──────────────────────────────────
+app.get('/api/test-journal', async (req, res) => {
   try {
-    const r = await fetch(`${BASE}`, { headers: HEADERS });
+    const r = await fetch(`${BASE}/entries?pagesize=3`, { headers: HEADERS });
     const d = await r.json();
     res.json(d);
   } catch (e) {
@@ -52,58 +52,15 @@ app.get('/api/test-root', async (req, res) => {
   }
 });
 
-app.get('/api/test-journal', async (req, res) => {
-  try {
-    const ayRes = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
-    const ayData = await ayRes.json();
-    const years = ayData.collection || [];
-    const target = years.find(y => y.year === '2026') || years[years.length - 1];
-    if (!target) return res.json({ error: 'Ingen regnskabsår fundet', years });
-    const eRes = await fetch(`${target.entries}?pagesize=3`, { headers: HEADERS });
-    const eData = await eRes.json();
-    res.json({ accountingYear: target.year, entriesUrl: target.entries, sample: eData.collection || [], raw: eData });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ─── HENT ENTRIES VIA ACCOUNTING-YEARS ───────────────────
-async function fetchEntriesForYear(year) {
-  const ayRes = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
-  const ayData = await ayRes.json();
-  const years = ayData.collection || [];
-  const target = years.find(y => y.year === String(year)) || years.find(y => y.year.startsWith(String(year)));
-  if (!target) return [];
-
+// ─── HENT ENTRIES MED DATOFILTER ─────────────────────────
+async function fetchEntries(fromDate, toDate) {
   let all = [];
-  let url = `${target.entries}?pagesize=1000`;
+  let url = `${BASE}/entries?pagesize=1000&filter=date$gte:${fromDate}$and:date$lte:${toDate}`;
   while (url) {
     const r = await fetch(url, { headers: HEADERS });
     const d = await r.json();
     all = all.concat(d.collection || []);
     url = d.pagination?.nextPage || null;
-  }
-  return all;
-}
-
-async function fetchEntriesForPeriod(fromDate, toDate) {
-  const ayRes = await fetch(`${BASE}/accounting-years`, { headers: HEADERS });
-  const ayData = await ayRes.json();
-  const years = ayData.collection || [];
-
-  const relevant = years.filter(y =>
-    new Date(y.toDate) >= new Date(fromDate) && new Date(y.fromDate) <= new Date(toDate)
-  );
-
-  let all = [];
-  for (const ay of relevant) {
-    let url = `${ay.entries}?pagesize=1000&filter=date$gte:${fromDate}$and:date$lte:${toDate}`;
-    while (url) {
-      const r = await fetch(url, { headers: HEADERS });
-      const d = await r.json();
-      all = all.concat(d.collection || []);
-      url = d.pagination?.nextPage || null;
-    }
   }
   return all;
 }
@@ -145,7 +102,7 @@ app.get('/api/liquidity', async (req, res) => {
     const fromStr = from.toISOString().split('T')[0];
     const toStr   = today.toISOString().split('T')[0];
 
-    const all = await fetchEntriesForPeriod(fromStr, toStr);
+    const all = await fetchEntries(fromStr, toStr);
     const bankEntries = all.filter(e => (e.account?.accountNumber || 0) === BANK_ACCOUNT);
     bankEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -189,9 +146,8 @@ app.get('/api/liquidity', async (req, res) => {
 app.get('/api/revenue', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-
     const [entries, invoices] = await Promise.all([
-      fetchEntriesForYear(year),
+      fetchEntries(`${year}-01-01`, `${year}-12-31`),
       fetchAllInvoices(year)
     ]);
 

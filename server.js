@@ -19,7 +19,6 @@ const HEADERS = {
 };
 const BASE = 'https://restapi.e-conomic.com';
 
-// ─── KONTOPLAN MAPPING ────────────────────────────────────
 const PL_MAP = {
   revenue:        { from: 1004, to: 1030 },
   directPay:      { from: 1100, to: 1112 },
@@ -35,13 +34,11 @@ const PL_MAP = {
   interestCosts:  { from: 4410, to: 4481 },
 };
 
-// ─── LOGIN ────────────────────────────────────────────────
 app.post('/api/login', (req, res) => {
   if (req.body.password === PASSWORD) res.json({ ok: true });
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
-// ─── SUMMARY ──────────────────────────────────────────────
 app.get('/api/summary', async (req, res) => {
   try {
     const [inv, cust, prod] = await Promise.all([
@@ -58,7 +55,23 @@ app.get('/api/summary', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── HENT FINANSPOSTER FOR ET ÅR ─────────────────────────
+// ─── TEST ENDPOINT ────────────────────────────────────────
+app.get('/api/test-journal', async (req, res) => {
+  try {
+    const r = await fetch(`${BASE}/journals/entries/booked?pagesize=5`, { headers: HEADERS });
+    const d = await r.json();
+    res.json(d);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/test-accounts', async (req, res) => {
+  try {
+    const r = await fetch(`${BASE}/accounts?pagesize=5`, { headers: HEADERS });
+    const d = await r.json();
+    res.json(d);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 async function fetchJournalEntries(year) {
   const from = `${year}-01-01`;
   const to   = `${year}-12-31`;
@@ -91,68 +104,39 @@ function sumCategory(entries, range, month) {
     .reduce((sum, e) => sum + (e.amount || 0), 0);
 }
 
-// ─── REVENUE + P/L PER MÅNED ──────────────────────────────
 app.get('/api/revenue', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
 
-    // Hent finansposter og fakturaer parallelt
-    const [entries, invoiceData] = await Promise.all([
+    const [entries, invoices] = await Promise.all([
       fetchJournalEntries(year),
       fetchAllInvoices(year)
     ]);
 
     const months = Array.from({length: 12}, (_, i) => {
       const m = i + 1;
-      const invoices = invoiceData.filter(inv => new Date(inv.date).getMonth() + 1 === m);
+      const monthInvoices = invoices.filter(inv => new Date(inv.date).getMonth() + 1 === m);
 
-      // Omsætning fra finansposter (kredit = negativ i e-conomic → gør positiv)
       const revenue      = -sumCategory(entries, PL_MAP.revenue, m);
       const directPay    = -sumCategory(entries, PL_MAP.directPay, m);
       const totalRevenue = revenue + directPay;
+      const cogs         = sumCategory(entries, PL_MAP.cogs, m);
+      const salaries     = sumCategory(entries, PL_MAP.salaries, m) + sumCategory(entries, PL_MAP.otherPersonnel, m);
+      const rent         = sumCategory(entries, PL_MAP.rent, m);
+      const otherOpex    = sumCategory(entries, PL_MAP.salesCosts, m) + sumCategory(entries, PL_MAP.carCosts, m) + sumCategory(entries, PL_MAP.adminCosts, m);
+      const depreciation = sumCategory(entries, PL_MAP.depreciation, m);
+      const interest     = sumCategory(entries, PL_MAP.interestCosts, m) - (-sumCategory(entries, PL_MAP.interestIncome, m));
+      const cashflow     = monthInvoices.filter(inv => (inv.remainder||0) === 0).reduce((s,inv) => s + (inv.grossAmount||0), 0);
+      const customerSet  = new Set(monthInvoices.map(inv => inv.customer?.customerNumber).filter(Boolean));
 
-      // Omkostninger (debet = positiv i e-conomic)
-      const cogs           = sumCategory(entries, PL_MAP.cogs, m);
-      const salaries       = sumCategory(entries, PL_MAP.salaries, m) + sumCategory(entries, PL_MAP.otherPersonnel, m);
-      const rent           = sumCategory(entries, PL_MAP.rent, m);
-      const salesCosts     = sumCategory(entries, PL_MAP.salesCosts, m);
-      const carCosts       = sumCategory(entries, PL_MAP.carCosts, m);
-      const adminCosts     = sumCategory(entries, PL_MAP.adminCosts, m);
-      const otherOpex      = salesCosts + carCosts + adminCosts;
-      const depreciation   = sumCategory(entries, PL_MAP.depreciation, m);
-      const interestIncome = -sumCategory(entries, PL_MAP.interestIncome, m);
-      const interestCosts  = sumCategory(entries, PL_MAP.interestCosts, m);
-      const interest       = interestCosts - interestIncome;
-
-      // Cashflow: betalte fakturaer denne måned
-      const cashflow = invoices
-        .filter(inv => (inv.remainder || 0) === 0)
-        .reduce((s, inv) => s + (inv.grossAmount || 0), 0);
-
-      // Kunder
-      const customerSet = new Set(invoices.map(inv => inv.customer?.customerNumber).filter(Boolean));
-
-      return {
-        month: m,
-        revenue: totalRevenue,
-        cogs,
-        salaries,
-        rent,
-        otherOpex,
-        depreciation,
-        interest,
-        cashflow,
-        customers: customerSet.size,
-        _customerIds: [...customerSet]
-      };
+      return { month: m, revenue: totalRevenue, cogs, salaries, rent, otherOpex, depreciation, interest, cashflow, customers: customerSet.size, _cids: [...customerSet] };
     });
 
-    // Beregn nye kunder pr. måned
     const seen = new Set();
     months.forEach(m => {
-      m.newCustomers = m._customerIds.filter(c => !seen.has(c)).length;
-      m._customerIds.forEach(c => seen.add(c));
-      delete m._customerIds;
+      m.newCustomers = m._cids.filter(c => !seen.has(c)).length;
+      m._cids.forEach(c => seen.add(c));
+      delete m._cids;
     });
 
     res.json({ year, months });
@@ -178,7 +162,6 @@ async function fetchAllInvoices(year) {
   return all;
 }
 
-// ─── BOGFØRTE FAKTURAER ───────────────────────────────────
 app.get('/api/invoices/booked', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -187,14 +170,10 @@ app.get('/api/invoices/booked', async (req, res) => {
       { headers: HEADERS }
     );
     const d = await r.json();
-    res.json({
-      invoices:  d.collection || [],
-      pageCount: Math.ceil((d.pagination?.results || 0) / 50)
-    });
+    res.json({ invoices: d.collection || [], pageCount: Math.ceil((d.pagination?.results || 0) / 50) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── KLADDER ──────────────────────────────────────────────
 app.get('/api/invoices/drafts', async (req, res) => {
   try {
     const r = await fetch(`${BASE}/invoices/drafts?pagesize=100&sort=draftInvoiceNumber$desc`, { headers: HEADERS });
@@ -203,35 +182,23 @@ app.get('/api/invoices/drafts', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── UBETALTE ─────────────────────────────────────────────
 app.get('/api/invoices/unpaid', async (req, res) => {
   try {
-    const r = await fetch(
-      `${BASE}/invoices/booked?filter=remainder$gt:0&pagesize=100&sort=dueDate$asc`,
-      { headers: HEADERS }
-    );
+    const r = await fetch(`${BASE}/invoices/booked?filter=remainder$gt:0&pagesize=100&sort=dueDate$asc`, { headers: HEADERS });
     const d = await r.json();
     res.json({ invoices: d.collection || [] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── KUNDER ───────────────────────────────────────────────
 app.get('/api/customers', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const r = await fetch(
-      `${BASE}/customers?pagesize=50&skippages=${page-1}&sort=name$asc`,
-      { headers: HEADERS }
-    );
+    const r = await fetch(`${BASE}/customers?pagesize=50&skippages=${page-1}&sort=name$asc`, { headers: HEADERS });
     const d = await r.json();
-    res.json({
-      customers: d.collection || [],
-      pageCount: Math.ceil((d.pagination?.results || 0) / 50)
-    });
+    res.json({ customers: d.collection || [], pageCount: Math.ceil((d.pagination?.results || 0) / 50) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── PRODUKTER ────────────────────────────────────────────
 app.get('/api/products', async (req, res) => {
   try {
     const r = await fetch(`${BASE}/products?pagesize=100`, { headers: HEADERS });
@@ -240,7 +207,6 @@ app.get('/api/products', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── ORDRER ───────────────────────────────────────────────
 app.get('/api/orders', async (req, res) => {
   try {
     const r = await fetch(`${BASE}/orders/drafts?pagesize=100&sort=orderNumber$desc`, { headers: HEADERS });
@@ -249,6 +215,5 @@ app.get('/api/orders', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── START ────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server kører på port ${PORT}`));

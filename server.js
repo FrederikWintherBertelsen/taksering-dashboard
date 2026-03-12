@@ -42,7 +42,6 @@ app.get('/api/test-pl', async (req, res) => {
     const year = 2026;
     const month = 2;
 
-    // Kun bogførte
     let booked = [];
     let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
     while (url) {
@@ -53,7 +52,6 @@ app.get('/api/test-pl', async (req, res) => {
     }
     booked = booked.filter(e => new Date(e.date).getMonth() + 1 === month);
 
-    // Kun kladder
     let drafts = [];
     const journalNums = [1, 2, 3, 8, 11, 12, 13];
     for (const jNum of journalNums) {
@@ -67,14 +65,34 @@ app.get('/api/test-pl', async (req, res) => {
       }
     }
 
-    // Summer per kategori
+    const combined = [...booked, ...drafts];
+
+    // Per-konto breakdown for admin (3600-3790)
+    const adminAccounts = {};
+    combined.forEach(e => {
+      const acc = e.account?.accountNumber || 0;
+      if (acc >= 3600 && acc <= 3790) {
+        if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 };
+        const isBooked = !e.journal; // bogførte entries har ikke journal-felt
+        if (e.journal) adminAccounts[acc].drafts += e.amount || 0;
+        else adminAccounts[acc].booked += e.amount || 0;
+      }
+    });
+
+    // Rund af
+    Object.keys(adminAccounts).forEach(k => {
+      adminAccounts[k].booked = Math.round(adminAccounts[k].booked);
+      adminAccounts[k].drafts = Math.round(adminAccounts[k].drafts);
+      adminAccounts[k].combined = adminAccounts[k].booked + adminAccounts[k].drafts;
+    });
+
     const cats = Object.entries(PL_MAP).map(([name, range]) => {
       const b = booked.filter(e => inRange(e.account?.accountNumber || 0, range)).reduce((s, e) => s + (e.amount || 0), 0);
       const d = drafts.filter(e => inRange(e.account?.accountNumber || 0, range)).reduce((s, e) => s + (e.amount || 0), 0);
       return { name, range: `${range.from}-${range.to}`, booked: Math.round(b), drafts: Math.round(d), combined: Math.round(b + d) };
     });
 
-    res.json({ month: 'Februar 2026', bookedCount: booked.length, draftsCount: drafts.length, categories: cats });
+    res.json({ month: 'Februar 2026', bookedCount: booked.length, draftsCount: drafts.length, categories: cats, adminByAccount: adminAccounts });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

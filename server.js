@@ -47,12 +47,20 @@ app.get('/api/test-journal', async (req, res) => {
       all = all.concat(d.collection || []);
       url = d.pagination?.nextPage || null;
     }
-    const salesEntries = all.filter(e => {
+    const entries = all.filter(e => {
       const acc = e.account?.accountNumber || 0;
-      return acc >= 2740 && acc <= 2811;
+      return acc >= 2210 && acc <= 2285;
     });
-    const total = salesEntries.reduce((s, e) => s + (e.amount || 0), 0);
-    res.json({ total, count: salesEntries.length, entries: salesEntries });
+
+    const byAccount = {};
+    entries.forEach(e => {
+      const acc = e.account.accountNumber;
+      if (!byAccount[acc]) byAccount[acc] = { total: 0, count: 0 };
+      byAccount[acc].total += e.amount;
+      byAccount[acc].count++;
+    });
+
+    res.json({ grandTotal: entries.reduce((s,e) => s + e.amount, 0), byAccount });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

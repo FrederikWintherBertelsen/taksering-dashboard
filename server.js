@@ -38,6 +38,15 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
+// Hjælpefunktion: ekskl. moms for kladder
+// Type 3 (leverandør): beløb er inkl. moms hvis contraVatCode er sat
+// Type 5 (finans): beløb er inkl. moms hvis vatCode er sat
+function draftAmountExVat(e) {
+  const raw = Math.abs(e.amount || 0);
+  const hasVat = e.contraVatCode || e.vatCode;
+  return hasVat ? raw / 1.25 : raw;
+}
+
 app.get('/api/test-pl', async (req, res) => {
   try {
     const year = 2026;
@@ -53,28 +62,23 @@ app.get('/api/test-pl', async (req, res) => {
     }
     booked = booked.filter(e => new Date(e.date).getMonth() + 1 === month);
 
-    // Hent kladder fra nyt API
     let drafts = [];
     let dUrl = `${BASE_NEW}/draft-entries`;
     while (dUrl) {
       const r = await fetch(dUrl, { headers: HEADERS });
       const d = await r.json();
-      const items = d.items || [];
-      const filtered = items.filter(e => {
+      const items = (d.items || []).filter(e => {
         if (!e.date) return false;
         const date = new Date(e.date);
         return date.getFullYear() === year && date.getMonth() + 1 === month;
       });
-      drafts = drafts.concat(filtered);
+      drafts = drafts.concat(items);
       dUrl = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
     }
 
     // Per-konto breakdown for admin (3600-3790)
-    // For leverandørposteringer (type 3): brug contraAccountNumber som udgiftskonto
     const adminAccounts = {};
-    const allEntries = [...booked, ...drafts];
 
-    // Bogførte
     booked.forEach(e => {
       const acc = e.account?.accountNumber || 0;
       if (acc >= 3600 && acc <= 3790) {
@@ -83,13 +87,11 @@ app.get('/api/test-pl', async (req, res) => {
       }
     });
 
-    // Kladder — type 3 = leverandørpostering, brug contraAccountNumber
     drafts.forEach(e => {
       const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
       if (acc >= 3600 && acc <= 3790) {
         if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 };
-        // For type 3: beløbet er negativt (betaling til leverandør), tag absolut værdi
-        adminAccounts[acc].drafts += e.entryTypeNumber === 3 ? Math.abs(e.amount || 0) : (e.amount || 0);
+        adminAccounts[acc].drafts += draftAmountExVat(e);
       }
     });
 
@@ -104,7 +106,7 @@ app.get('/api/test-pl', async (req, res) => {
       const d = drafts.reduce((s, e) => {
         const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
         if (!inRange(acc, range)) return s;
-        return s + (e.entryTypeNumber === 3 ? Math.abs(e.amount || 0) : (e.amount || 0));
+        return s + draftAmountExVat(e);
       }, 0);
       return { name, range: `${range.from}-${range.to}`, booked: Math.round(b), drafts: Math.round(d), combined: Math.round(b + d) };
     });
@@ -161,15 +163,15 @@ function sumCat(entries, range, month) {
   return entries
     .filter(e => {
       const date = new Date(e.date);
-      // For kladder type 3: brug contraAccountNumber
-      const acc = (e.entryTypeNumber === 3)
+      const acc = e.entryTypeNumber === 3
         ? (e.contraAccountNumber || 0)
         : (e.account?.accountNumber || e.accountNumber || 0);
       return date.getMonth() + 1 === month && inRange(acc, range);
     })
     .reduce((s, e) => {
-      const amt = e.entryTypeNumber === 3 ? Math.abs(e.amount || 0) : (e.amount || e.amount || 0);
-      return s + amt;
+      // Bogførte entries har account-objekt, kladder har ikke
+      if (e.account) return s + (e.amount || 0);
+      return s + draftAmountExVat(e);
     }, 0);
 }
 
@@ -213,7 +215,6 @@ app.get('/api/liquidity', async (req, res) => {
     let all = [];
     for (const y of years) all = all.concat(await fetchAllEntries(y));
 
-    // Likviditet: kun bogførte entries på konto 6750
     const bankEntries = all
       .filter(e => {
         const acc = e.account?.accountNumber || 0;

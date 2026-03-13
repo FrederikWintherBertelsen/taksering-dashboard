@@ -94,7 +94,11 @@ app.get('/api/test-pl', async (req, res) => {
     while (dUrl) {
       const r = await fetch(dUrl, { headers: HEADERS });
       const d = await r.json();
-      const items = (d.items || []).filter(e => { if (!e.date) return false; const date = new Date(e.date); return date.getFullYear() === year && date.getMonth() + 1 === month; });
+      const items = (d.items || []).filter(e => {
+        if (!e.date) return false;
+        const date = new Date(e.date);
+        return date.getFullYear() === year && date.getMonth() + 1 === month;
+      });
       drafts = drafts.concat(items);
       dUrl = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
     }
@@ -121,7 +125,10 @@ async function fetchAllDraftEntries(year) {
   while (url) {
     const r = await fetch(url, { headers: HEADERS });
     const d = await r.json();
-    const items = (d.items || []).filter(e => { if (!e.date) return false; return new Date(e.date).getFullYear() === year; });
+    const items = (d.items || []).filter(e => {
+      if (!e.date) return false;
+      return new Date(e.date).getFullYear() === year;
+    });
     drafts = drafts.concat(items);
     url = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
   }

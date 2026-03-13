@@ -1,4 +1,4 @@
-// v18
+// v19
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -57,6 +57,17 @@ function draftAmountDKK(e) {
   }
 }
 
+// Fælles hjælpefunktion: find bankkontoens beløb uanset entry-type
+function bankAmount(e) {
+  if (e.entryTypeNumber === 3) return -(e.amount || 0);
+  return e.amount || 0;
+}
+
+function isBankEntry(e) {
+  if (e.entryTypeNumber === 3) return (e.contraAccountNumber || 0) === BANK_ACCOUNT;
+  return (e.account?.accountNumber || e.accountNumber || 0) === BANK_ACCOUNT;
+}
+
 async function fetchAllDraftEntries(year) {
   let drafts = [];
   let url = `${BASE_NEW}/draft-entries`;
@@ -88,9 +99,7 @@ async function fetchAllCashbookEntries(year) {
       });
       all = all.concat(items);
     }
-  } catch (e) {
-    // cashbooks ikke tilgængelige
-  }
+  } catch (e) {}
   return all;
 }
 
@@ -109,8 +118,8 @@ async function fetchEntriesForYear(year) {
 }
 
 async function fetchAllEntries(year) {
-  const entries = await fetchEntriesForYear(year);
-  const drafts  = await fetchAllDraftEntries(year);
+  const entries  = await fetchEntriesForYear(year);
+  const drafts   = await fetchAllDraftEntries(year);
   const cashbook = await fetchAllCashbookEntries(year);
   return entries.concat(drafts).concat(cashbook);
 }
@@ -184,28 +193,21 @@ app.get('/api/liquidity', async (req, res) => {
     const toStr   = toDate.toISOString().split('T')[0];
 
     const openingBalance = OPENING_BALANCES[year] || 0;
-
     const all = await fetchAllEntries(year);
 
-    const bankEntries = all
-      .filter(e => {
-        const acc = e.entryTypeNumber === 3
-          ? (e.contraAccountNumber || 0)
-          : (e.account?.accountNumber || e.accountNumber || 0);
-        const dateStr = (e.date || '').split('T')[0];
-        return acc === BANK_ACCOUNT && dateStr <= toStr;
-      })
-      .sort((a, b) => {
-        const dateDiff = new Date(a.date) - new Date(b.date);
-        if (dateDiff !== 0) return dateDiff;
-        return (a.entryNumber || 0) - (b.entryNumber || 0);
-      });
+    const bankEntries = all.filter(e => {
+      const dateStr = (e.date || '').split('T')[0];
+      return isBankEntry(e) && dateStr <= toStr;
+    }).sort((a, b) => {
+      const dateDiff = new Date(a.date) - new Date(b.date);
+      if (dateDiff !== 0) return dateDiff;
+      return (a.entryNumber || 0) - (b.entryNumber || 0);
+    });
 
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      const amount = e.entryTypeNumber === 3 ? -(e.amount || 0) : (e.amount || 0);
-      deltaMap[day] = (deltaMap[day] || 0) + amount;
+      deltaMap[day] = (deltaMap[day] || 0) + bankAmount(e);
     });
 
     let running = openingBalance;
@@ -290,14 +292,14 @@ app.get('/api/debug/bank', async (req, res) => {
     const year = parseInt(req.query.year) || new Date().getFullYear();
     const all = await fetchAllEntries(year);
     const bankEntries = all
-      .filter(e => (e.account?.accountNumber || e.accountNumber) === BANK_ACCOUNT)
+      .filter(e => isBankEntry(e))
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const openingBalance = OPENING_BALANCES[year] || 0;
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      deltaMap[day] = (deltaMap[day] || 0) + (e.amount || 0);
+      deltaMap[day] = (deltaMap[day] || 0) + bankAmount(e);
     });
 
     let running = openingBalance;
@@ -314,7 +316,7 @@ app.get('/api/debug/drafts', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
     const drafts = await fetchAllDraftEntries(year);
-    const bank = drafts.filter(e => (e.accountNumber || 0) === BANK_ACCOUNT);
+    const bank = drafts.filter(e => isBankEntry(e));
     res.json({ count: bank.length, entries: bank });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -329,10 +331,9 @@ app.get('/api/debug/cashbooks', async (req, res) => {
     for (const cb of cashbooks) {
       const entriesRes = await fetch(`${BASE}/cashbooks/${cb.cashBookNumber}/entries?pagesize=1000`, { headers: HEADERS });
       const entriesData = await entriesRes.json();
-      const bank = (entriesData.collection || []).filter(e => {
-        const acc = e.account?.accountNumber || e.accountNumber || 0;
-        return acc === BANK_ACCOUNT && new Date(e.date).getFullYear() === year;
-      });
+      const bank = (entriesData.collection || []).filter(e =>
+        isBankEntry(e) && new Date(e.date).getFullYear() === year
+      );
       result.push({ cashbook: cb, bankEntries: bank });
     }
     res.json(result);

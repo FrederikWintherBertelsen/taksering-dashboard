@@ -1,4 +1,4 @@
-// v11b
+// v12
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -18,8 +18,8 @@ const HEADERS = {
   'X-AgreementGrantToken': GRANT,
   'Content-Type': 'application/json'
 };
-const BASE      = 'https://restapi.e-conomic.com';
-const BASE_NEW  = 'https://apis.e-conomic.com/journalsapi/v14.0.1';
+const BASE     = 'https://restapi.e-conomic.com';
+const BASE_NEW = 'https://apis.e-conomic.com/journalsapi/v14.0.1';
 
 const PL_MAP = {
   revenue:      { from: 1004, to: 1030 },
@@ -33,6 +33,12 @@ const PL_MAP = {
 };
 
 const BANK_ACCOUNT = 5830;
+
+// Indgående balancer for konto 5830 pr. 1. januar hvert år
+const OPENING_BALANCES = {
+  2025: 0,
+  2026: 1121679.51,
+};
 
 app.post('/api/login', (req, res) => {
   if (req.body.password === PASSWORD) res.json({ ok: true });
@@ -68,7 +74,6 @@ async function fetchAllDraftEntries(year) {
   return drafts;
 }
 
-// Hent alle posteringer for ét år med fuld paginering
 async function fetchEntriesForYear(year) {
   let all = [];
   let page = 0;
@@ -157,21 +162,14 @@ app.get('/api/liquidity', async (req, res) => {
     const toDate  = endDate < today ? endDate : today;
     const toStr   = toDate.toISOString().split('T')[0];
 
-    const currentYear = toDate.getFullYear();
+    const openingBalance = OPENING_BALANCES[year] || 0;
 
-    // Hent alle posteringer fra 2025 og frem med fuld paginering
-    const fetchYears = [2025, 2026, 2027].filter(y => y <= currentYear);
-    let all = [];
-    for (const y of fetchYears) {
-      const entries = await fetchEntriesForYear(y);
-      all = all.concat(entries);
-    }
+    const [entries, drafts] = await Promise.all([
+      fetchEntriesForYear(year),
+      fetchAllDraftEntries(year)
+    ]);
+    const all = entries.concat(drafts);
 
-    // Tilføj kladder for indeværende år
-    const drafts = await fetchAllDraftEntries(currentYear);
-    all = all.concat(drafts);
-
-    // Filtrer kun konto 5830, op til toStr, sorter kronologisk + entryNumber
     const bankEntries = all
       .filter(e => {
         const acc = e.account?.accountNumber || e.accountNumber || 0;
@@ -184,27 +182,24 @@ app.get('/api/liquidity', async (req, res) => {
         return (a.entryNumber || 0) - (b.entryNumber || 0);
       });
 
-    // Byg daglig delta-map
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
       deltaMap[day] = (deltaMap[day] || 0) + (e.amount || 0);
     });
 
-    // Akkumuler til løbende saldo (startsaldo = 0, konto 5830 åbner 01.01.2025)
-    let running = 0;
+    let running = openingBalance;
     const dailyMap = {};
     Object.keys(deltaMap).sort().forEach(d => {
       running += deltaMap[d];
       dailyMap[d] = Math.round(running * 100) / 100;
     });
 
-    // Byg 90-dages serie med forward-fill
     const cutoff = new Date(toDate);
     cutoff.setDate(toDate.getDate() - 90);
 
     const allDates = Object.keys(dailyMap).sort();
-    let lastKnown = 0;
+    let lastKnown = openingBalance;
     allDates.forEach(d => { if (new Date(d) <= cutoff) lastKnown = dailyMap[d]; });
 
     const days = [];
@@ -268,38 +263,28 @@ app.get('/api/orders', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Debug endpoint — viser akkumuleret daglig saldo for konto 5830
 app.get('/api/debug/bank', async (req, res) => {
   try {
-    let all = [];
-    for (const y of [2025, 2026]) {
-      const entries = await fetchEntriesForYear(y);
-      all = all.concat(entries);
-    }
-    const bankEntries = all
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const entries = await fetchEntriesForYear(year);
+    const bankEntries = entries
       .filter(e => (e.account?.accountNumber || e.accountNumber) === BANK_ACCOUNT)
-      .sort((a, b) => {
-        const dateDiff = new Date(a.date) - new Date(b.date);
-        if (dateDiff !== 0) return dateDiff;
-        return (a.entryNumber || 0) - (b.entryNumber || 0);
-      });
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    const openingBalance = OPENING_BALANCES[year] || 0;
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
       deltaMap[day] = (deltaMap[day] || 0) + (e.amount || 0);
     });
 
-    let running = 0;
+    let running = openingBalance;
     const dailyBalances = Object.keys(deltaMap).sort().map(d => {
       running += deltaMap[d];
       return { date: d, balance: Math.round(running * 100) / 100 };
     });
 
-    res.json({
-      totalEntries: bankEntries.length,
-      dailyBalances
-    });
+    res.json({ year, openingBalance, totalEntries: bankEntries.length, dailyBalances });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -1,4 +1,4 @@
-// v12
+// v13
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -34,7 +34,6 @@ const PL_MAP = {
 
 const BANK_ACCOUNT = 5830;
 
-// Indgående balancer for konto 5830 pr. 1. januar hvert år
 const OPENING_BALANCES = {
   2025: 0,
   2026: 1121679.51,
@@ -164,11 +163,8 @@ app.get('/api/liquidity', async (req, res) => {
 
     const openingBalance = OPENING_BALANCES[year] || 0;
 
-    const [entries, drafts] = await Promise.all([
-      fetchEntriesForYear(year),
-      fetchAllDraftEntries(year)
-    ]);
-    const all = entries.concat(drafts);
+    // Kun bogførte posteringer — kladder medtages ikke
+    const all = await fetchEntriesForYear(year);
 
     const bankEntries = all
       .filter(e => {
@@ -195,8 +191,11 @@ app.get('/api/liquidity', async (req, res) => {
       dailyMap[d] = Math.round(running * 100) / 100;
     });
 
+    // Cutoff må aldrig gå før 1. januar i det valgte år
     const cutoff = new Date(toDate);
     cutoff.setDate(toDate.getDate() - 90);
+    const yearStart = new Date(year, 0, 1);
+    if (cutoff < yearStart) cutoff.setTime(yearStart.getTime());
 
     const allDates = Object.keys(dailyMap).sort();
     let lastKnown = openingBalance;
@@ -266,8 +265,9 @@ app.get('/api/orders', async (req, res) => {
 app.get('/api/debug/bank', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const entries = await fetchEntriesForYear(year);
-    const bankEntries = entries
+    const r = await fetch(`${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`, { headers: HEADERS });
+    const d = await r.json();
+    const bankEntries = (d.collection || [])
       .filter(e => (e.account?.accountNumber || e.accountNumber) === BANK_ACCOUNT)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 

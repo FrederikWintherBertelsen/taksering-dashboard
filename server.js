@@ -1,4 +1,4 @@
-// v7
+// v8
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -153,12 +153,13 @@ app.get('/api/liquidity', async (req, res) => {
     const startYear = 2020;
     const currentYear = toDate.getFullYear();
 
-    // Hent bogførte entries for alle år parallelt
+    // Hent bogførte entries for alle år parallelt, spring over hvis året ikke findes
     async function fetchBookedOnly(y) {
       let all = [];
       let url = `${BASE}/accounting-years/${y}/entries?pagesize=1000&skippages=0`;
       while (url) {
         const r = await fetch(url, { headers: HEADERS });
+        if (!r.ok) break;
         const d = await r.json();
         all = all.concat(d.collection || []);
         url = d.pagination?.nextPage || null;

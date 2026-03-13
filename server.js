@@ -1,4 +1,4 @@
-// v20
+// v21
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -67,18 +67,33 @@ function isBankEntry(e) {
   return (e.account?.accountNumber || e.accountNumber || 0) === BANK_ACCOUNT;
 }
 
-async function fetchAllDraftEntries(year) {
-  let drafts = [];
-  let url = `${BASE_NEW}/draft-entries`;
+async function fetchAllJournals() {
+  let journals = [];
+  let url = `${BASE_NEW}/journals`;
   while (url) {
     const r = await fetch(url, { headers: HEADERS });
     const d = await r.json();
-    const items = (d.items || []).filter(e => {
-      if (!e.date) return false;
-      return new Date(e.date).getFullYear() === year;
-    });
-    drafts = drafts.concat(items);
-    url = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
+    journals = journals.concat(d.items || []);
+    url = d.cursor ? `${BASE_NEW}/journals?cursor=${d.cursor}` : null;
+  }
+  return journals;
+}
+
+async function fetchAllDraftEntries(year) {
+  let drafts = [];
+  const journals = await fetchAllJournals();
+  for (const journal of journals) {
+    let url = `${BASE_NEW}/draft-entries?journalNumber=${journal.number}`;
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      const items = (d.items || []).filter(e => {
+        if (!e.date) return false;
+        return new Date(e.date).getFullYear() === year;
+      });
+      drafts = drafts.concat(items);
+      url = d.cursor ? `${BASE_NEW}/draft-entries?journalNumber=${journal.number}&cursor=${d.cursor}` : null;
+    }
   }
   return drafts;
 }

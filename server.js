@@ -1,4 +1,4 @@
-// v19
+// v20
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -57,7 +57,6 @@ function draftAmountDKK(e) {
   }
 }
 
-// Fælles hjælpefunktion: find bankkontoens beløb uanset entry-type
 function bankAmount(e) {
   if (e.entryTypeNumber === 3) return -(e.amount || 0);
   return e.amount || 0;
@@ -337,6 +336,14 @@ app.get('/api/debug/cashbooks', async (req, res) => {
       result.push({ cashbook: cb, bankEntries: bank });
     }
     res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/debug/journals', async (req, res) => {
+  try {
+    const r = await fetch(`${BASE_NEW}/journals`, { headers: HEADERS });
+    const d = await r.json();
+    res.json(d);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

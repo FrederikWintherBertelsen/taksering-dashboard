@@ -1,4 +1,4 @@
-// v15
+// v16
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -163,7 +163,6 @@ app.get('/api/liquidity', async (req, res) => {
 
     const openingBalance = OPENING_BALANCES[year] || 0;
 
-    // Bogførte + kladder
     const all = await fetchAllEntries(year);
 
     const bankEntries = all
@@ -181,7 +180,6 @@ app.get('/api/liquidity', async (req, res) => {
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      // Bankkonto: altid råbeløb uden momskorrektion
       const amount = e.amount || 0;
       deltaMap[day] = (deltaMap[day] || 0) + amount;
     });
@@ -193,7 +191,6 @@ app.get('/api/liquidity', async (req, res) => {
       dailyMap[d] = Math.round(running * 100) / 100;
     });
 
-    // Cutoff må aldrig gå før 1. januar i det valgte år
     const cutoff = new Date(toDate);
     cutoff.setDate(toDate.getDate() - 90);
     const yearStart = new Date(year, 0, 1);
@@ -286,6 +283,15 @@ app.get('/api/debug/bank', async (req, res) => {
     });
 
     res.json({ year, openingBalance, totalEntries: bankEntries.length, dailyBalances });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/debug/drafts', async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const drafts = await fetchAllDraftEntries(year);
+    const bank = drafts.filter(e => (e.accountNumber || 0) === BANK_ACCOUNT);
+    res.json({ count: bank.length, entries: bank });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

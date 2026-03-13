@@ -38,17 +38,6 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
-// Test: vis rå svar fra nyt draft-entries API
-app.get('/api/test-drafts', async (req, res) => {
-  try {
-    const r = await fetch(`${BASE_NEW}/draft-entries`, { headers: HEADERS });
-    const text = await r.text();
-    res.json({ status: r.status, raw: JSON.parse(text) });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 app.get('/api/test-pl', async (req, res) => {
   try {
     const year = 2026;
@@ -64,35 +53,46 @@ app.get('/api/test-pl', async (req, res) => {
     }
     booked = booked.filter(e => new Date(e.date).getMonth() + 1 === month);
 
-    // Nyt API med cursor pagination
+    // Hent kladder fra nyt API
     let drafts = [];
     let dUrl = `${BASE_NEW}/draft-entries`;
     while (dUrl) {
       const r = await fetch(dUrl, { headers: HEADERS });
       const d = await r.json();
-      // Nyt API returnerer array direkte eller under et felt
-      const items = Array.isArray(d) ? d : (d.collection || d.items || d.data || d.entries || []);
+      const items = d.items || [];
       const filtered = items.filter(e => {
-        const dateStr = e.date || e.Date;
-        if (!dateStr) return false;
-        const date = new Date(dateStr);
+        if (!e.date) return false;
+        const date = new Date(e.date);
         return date.getFullYear() === year && date.getMonth() + 1 === month;
       });
       drafts = drafts.concat(filtered);
-      // Cursor pagination
       dUrl = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
     }
 
-    const combined = [...booked, ...drafts];
+    // Per-konto breakdown for admin (3600-3790)
+    // For leverandørposteringer (type 3): brug contraAccountNumber som udgiftskonto
     const adminAccounts = {};
-    combined.forEach(e => {
-      const acc = e.account?.accountNumber || e.AccountNumber || e.accountNumber || 0;
+    const allEntries = [...booked, ...drafts];
+
+    // Bogførte
+    booked.forEach(e => {
+      const acc = e.account?.accountNumber || 0;
       if (acc >= 3600 && acc <= 3790) {
         if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 };
-        if (e.journal || e.JournalNumber || e.journalNumber) adminAccounts[acc].drafts += e.amount || e.Amount || 0;
-        else adminAccounts[acc].booked += e.amount || e.Amount || 0;
+        adminAccounts[acc].booked += e.amount || 0;
       }
     });
+
+    // Kladder — type 3 = leverandørpostering, brug contraAccountNumber
+    drafts.forEach(e => {
+      const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
+      if (acc >= 3600 && acc <= 3790) {
+        if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 };
+        // For type 3: beløbet er negativt (betaling til leverandør), tag absolut værdi
+        adminAccounts[acc].drafts += e.entryTypeNumber === 3 ? Math.abs(e.amount || 0) : (e.amount || 0);
+      }
+    });
+
     Object.keys(adminAccounts).forEach(k => {
       adminAccounts[k].booked = Math.round(adminAccounts[k].booked);
       adminAccounts[k].drafts = Math.round(adminAccounts[k].drafts);
@@ -101,10 +101,11 @@ app.get('/api/test-pl', async (req, res) => {
 
     const cats = Object.entries(PL_MAP).map(([name, range]) => {
       const b = booked.filter(e => inRange(e.account?.accountNumber || 0, range)).reduce((s, e) => s + (e.amount || 0), 0);
-      const d = drafts.filter(e => {
-        const acc = e.account?.accountNumber || e.AccountNumber || e.accountNumber || 0;
-        return inRange(acc, range);
-      }).reduce((s, e) => s + (e.amount || e.Amount || 0), 0);
+      const d = drafts.reduce((s, e) => {
+        const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
+        if (!inRange(acc, range)) return s;
+        return s + (e.entryTypeNumber === 3 ? Math.abs(e.amount || 0) : (e.amount || 0));
+      }, 0);
       return { name, range: `${range.from}-${range.to}`, booked: Math.round(b), drafts: Math.round(d), combined: Math.round(b + d) };
     });
 
@@ -118,13 +119,11 @@ async function fetchAllDraftEntries(year) {
   while (url) {
     const r = await fetch(url, { headers: HEADERS });
     const d = await r.json();
-    const items = Array.isArray(d) ? d : (d.collection || d.items || d.data || d.entries || []);
-    const filtered = items.filter(e => {
-      const dateStr = e.date || e.Date;
-      if (!dateStr) return false;
-      return new Date(dateStr).getFullYear() === year;
+    const items = (d.items || []).filter(e => {
+      if (!e.date) return false;
+      return new Date(e.date).getFullYear() === year;
     });
-    drafts = drafts.concat(filtered);
+    drafts = drafts.concat(items);
     url = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
   }
   return drafts;
@@ -161,11 +160,17 @@ function inRange(acc, range) { return acc >= range.from && acc <= range.to; }
 function sumCat(entries, range, month) {
   return entries
     .filter(e => {
-      const date = new Date(e.date || e.Date);
-      const acc = e.account?.accountNumber || e.AccountNumber || e.accountNumber || 0;
+      const date = new Date(e.date);
+      // For kladder type 3: brug contraAccountNumber
+      const acc = (e.entryTypeNumber === 3)
+        ? (e.contraAccountNumber || 0)
+        : (e.account?.accountNumber || e.accountNumber || 0);
       return date.getMonth() + 1 === month && inRange(acc, range);
     })
-    .reduce((s, e) => s + (e.amount || e.Amount || 0), 0);
+    .reduce((s, e) => {
+      const amt = e.entryTypeNumber === 3 ? Math.abs(e.amount || 0) : (e.amount || e.amount || 0);
+      return s + amt;
+    }, 0);
 }
 
 app.get('/api/revenue', async (req, res) => {
@@ -208,18 +213,19 @@ app.get('/api/liquidity', async (req, res) => {
     let all = [];
     for (const y of years) all = all.concat(await fetchAllEntries(y));
 
+    // Likviditet: kun bogførte entries på konto 6750
     const bankEntries = all
       .filter(e => {
-        const acc = e.account?.accountNumber || e.AccountNumber || e.accountNumber || 0;
-        const dateStr = (e.date || e.Date || '').split('T')[0];
+        const acc = e.account?.accountNumber || 0;
+        const dateStr = (e.date || '').split('T')[0];
         return acc === BANK_ACCOUNT && dateStr >= fromStr && dateStr <= toStr;
       })
-      .sort((a, b) => new Date(a.date || a.Date) - new Date(b.date || b.Date));
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const dailyMap = {};
     bankEntries.forEach(e => {
-      const day = (e.date || e.Date).split('T')[0];
-      dailyMap[day] = (dailyMap[day] || 0) + (e.amount || e.Amount || 0);
+      const day = e.date.split('T')[0];
+      dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
     });
 
     const allDates = Object.keys(dailyMap).sort();

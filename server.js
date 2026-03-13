@@ -1,4 +1,4 @@
-// v17
+// v18
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -189,7 +189,9 @@ app.get('/api/liquidity', async (req, res) => {
 
     const bankEntries = all
       .filter(e => {
-        const acc = e.account?.accountNumber || e.accountNumber || 0;
+        const acc = e.entryTypeNumber === 3
+          ? (e.contraAccountNumber || 0)
+          : (e.account?.accountNumber || e.accountNumber || 0);
         const dateStr = (e.date || '').split('T')[0];
         return acc === BANK_ACCOUNT && dateStr <= toStr;
       })
@@ -202,7 +204,7 @@ app.get('/api/liquidity', async (req, res) => {
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      const amount = e.amount || 0;
+      const amount = e.entryTypeNumber === 3 ? -(e.amount || 0) : (e.amount || 0);
       deltaMap[day] = (deltaMap[day] || 0) + amount;
     });
 

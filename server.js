@@ -46,7 +46,9 @@ function draftAmountDKK(e) {
     const hasVat = e.contraVatCode || e.vatCode;
     return hasVat ? dkk / 1.25 : dkk;
   } else {
-    return (e.amount || 0) * rate;
+    const dkk = (e.amount || 0) * rate;
+    const hasVat = e.contraVatCode || e.vatCode;
+    return hasVat ? dkk / 1.25 : dkk;
   }
 }
 

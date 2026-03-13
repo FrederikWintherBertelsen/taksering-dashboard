@@ -38,13 +38,13 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
-// Hjælpefunktion: ekskl. moms for kladder
-// Type 3 (leverandør): beløb er inkl. moms hvis contraVatCode er sat
-// Type 5 (finans): beløb er inkl. moms hvis vatCode er sat
-function draftAmountExVat(e) {
+// Beløb i DKK ekskl. moms for kladde-entries
+function draftAmountDKKExVat(e) {
   const raw = Math.abs(e.amount || 0);
+  const rate = (e.exchangeRate || 100) / 100;
+  const dkk = raw * rate;
   const hasVat = e.contraVatCode || e.vatCode;
-  return hasVat ? raw / 1.25 : raw;
+  return hasVat ? dkk / 1.25 : dkk;
 }
 
 app.get('/api/test-pl', async (req, res) => {
@@ -76,7 +76,6 @@ app.get('/api/test-pl', async (req, res) => {
       dUrl = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
     }
 
-    // Per-konto breakdown for admin (3600-3790)
     const adminAccounts = {};
 
     booked.forEach(e => {
@@ -91,7 +90,7 @@ app.get('/api/test-pl', async (req, res) => {
       const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
       if (acc >= 3600 && acc <= 3790) {
         if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 };
-        adminAccounts[acc].drafts += draftAmountExVat(e);
+        adminAccounts[acc].drafts += draftAmountDKKExVat(e);
       }
     });
 
@@ -106,7 +105,7 @@ app.get('/api/test-pl', async (req, res) => {
       const d = drafts.reduce((s, e) => {
         const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
         if (!inRange(acc, range)) return s;
-        return s + draftAmountExVat(e);
+        return s + draftAmountDKKExVat(e);
       }, 0);
       return { name, range: `${range.from}-${range.to}`, booked: Math.round(b), drafts: Math.round(d), combined: Math.round(b + d) };
     });
@@ -169,9 +168,8 @@ function sumCat(entries, range, month) {
       return date.getMonth() + 1 === month && inRange(acc, range);
     })
     .reduce((s, e) => {
-      // Bogførte entries har account-objekt, kladder har ikke
       if (e.account) return s + (e.amount || 0);
-      return s + draftAmountExVat(e);
+      return s + draftAmountDKKExVat(e);
     }, 0);
 }
 

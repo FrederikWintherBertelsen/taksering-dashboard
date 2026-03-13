@@ -1,4 +1,4 @@
-// v10
+// v11
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -68,18 +68,25 @@ async function fetchAllDraftEntries(year) {
   return drafts;
 }
 
-async function fetchAllEntries(year) {
+// Hent alle posteringer for ét år med fuld paginering
+async function fetchEntriesForYear(year) {
   let all = [];
-  let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
-  while (url) {
-    const r = await fetch(url, { headers: HEADERS });
+  let page = 0;
+  while (true) {
+    const r = await fetch(`${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=${page}`, { headers: HEADERS });
+    if (!r.ok) break;
     const d = await r.json();
     all = all.concat(d.collection || []);
-    url = d.pagination?.nextPage || null;
+    if (!d.pagination?.nextPage) break;
+    page++;
   }
-  const drafts = await fetchAllDraftEntries(year);
-  all = all.concat(drafts);
   return all;
+}
+
+async function fetchAllEntries(year) {
+  const entries = await fetchEntriesForYear(year);
+  const drafts  = await fetchAllDraftEntries(year);
+  return entries.concat(drafts);
 }
 
 async function fetchAllInvoices(year) {
@@ -152,64 +159,47 @@ app.get('/api/liquidity', async (req, res) => {
 
     const currentYear = toDate.getFullYear();
 
-    // Hent 2025 og frem
-    const fetchYears = [2025, 2026].filter(y => y <= currentYear);
+    // Hent alle posteringer fra 2025 og frem med fuld paginering
+    const fetchYears = [2025, 2026, 2027].filter(y => y <= currentYear);
     let all = [];
     for (const y of fetchYears) {
-      let url = `${BASE}/accounting-years/${y}/entries?pagesize=1000&skippages=0`;
-      while (url) {
-        const r = await fetch(url, { headers: HEADERS });
-        if (!r.ok) break;
-        const d = await r.json();
-        all = all.concat(d.collection || []);
-        url = d.pagination?.nextPage || null;
-      }
+      const entries = await fetchEntriesForYear(y);
+      all = all.concat(entries);
     }
 
     // Tilføj kladder for indeværende år
     const drafts = await fetchAllDraftEntries(currentYear);
     all = all.concat(drafts);
 
-    // Filtrer kun konto 5830, sorter kronologisk
+    // Filtrer kun konto 5830, op til toStr, sorter kronologisk + entryNumber
     const bankEntries = all
       .filter(e => {
         const acc = e.account?.accountNumber || e.accountNumber || 0;
         const dateStr = (e.date || '').split('T')[0];
         return acc === BANK_ACCOUNT && dateStr <= toStr;
       })
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+      .sort((a, b) => {
+        const dateDiff = new Date(a.date) - new Date(b.date);
+        if (dateDiff !== 0) return dateDiff;
+        return (a.entryNumber || 0) - (b.entryNumber || 0);
+      });
 
-    // Byg daglig saldo:
-    // Hvis e-conomic returnerer et 'balance'-felt, brug den direkte (sidst kendte saldo på dagen).
-    // Ellers akkumuler 'amount' fra nul.
-    const hasBalance = bankEntries.some(e => e.balance !== undefined && e.balance !== null);
+    // Byg daglig delta-map
+    const deltaMap = {};
+    bankEntries.forEach(e => {
+      const day = e.date.split('T')[0];
+      deltaMap[day] = (deltaMap[day] || 0) + (e.amount || 0);
+    });
 
+    // Akkumuler til løbende saldo (startsaldo = 0, konto 5830 åbner 01.01.2025)
+    let running = 0;
     const dailyMap = {};
-    if (hasBalance) {
-      // Brug det løbende balance-felt — tag den sidst bogførte saldo per dag
-      bankEntries.forEach(e => {
-        const day = e.date.split('T')[0];
-        if (e.balance !== undefined && e.balance !== null) {
-          dailyMap[day] = e.balance;
-        }
-      });
-    } else {
-      // Fallback: akkumuler amount
-      bankEntries.forEach(e => {
-        const day = e.date.split('T')[0];
-        dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
-      });
+    Object.keys(deltaMap).sort().forEach(d => {
+      running += deltaMap[d];
+      dailyMap[d] = Math.round(running * 100) / 100;
+    });
 
-      // Lav løbende sum
-      const allDays = Object.keys(dailyMap).sort();
-      let running = 0;
-      allDays.forEach(d => {
-        running += dailyMap[d];
-        dailyMap[d] = running;
-      });
-    }
-
-    // Byg 90-dages serie med forward-fill (carry last known balance)
+    // Byg 90-dages serie med forward-fill
     const cutoff = new Date(toDate);
     cutoff.setDate(toDate.getDate() - 90);
 
@@ -278,38 +268,38 @@ app.get('/api/orders', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Debug endpoint — viser alle bankposteringer med akkumuleret saldo dag for dag
+// Debug endpoint — viser akkumuleret daglig saldo for konto 5830
 app.get('/api/debug/bank', async (req, res) => {
   try {
-    const fetchYears = [2025, 2026];
     let all = [];
-    for (const y of fetchYears) {
-      let url = `${BASE}/accounting-years/${y}/entries?pagesize=1000&skippages=0`;
-      while (url) {
-        const r = await fetch(url, { headers: HEADERS });
-        if (!r.ok) break;
-        const d = await r.json();
-        all = all.concat(d.collection || []);
-        url = d.pagination?.nextPage || null;
-      }
+    for (const y of [2025, 2026]) {
+      const entries = await fetchEntriesForYear(y);
+      all = all.concat(entries);
     }
     const bankEntries = all
       .filter(e => (e.account?.accountNumber || e.accountNumber) === BANK_ACCOUNT)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+      .sort((a, b) => {
+        const dateDiff = new Date(a.date) - new Date(b.date);
+        if (dateDiff !== 0) return dateDiff;
+        return (a.entryNumber || 0) - (b.entryNumber || 0);
+      });
 
-    // Byg daglig saldo via akkumulering
-    const dailyMap = {};
+    const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
+      deltaMap[day] = (deltaMap[day] || 0) + (e.amount || 0);
     });
+
     let running = 0;
-    const days = Object.keys(dailyMap).sort().map(d => {
-      running += dailyMap[d];
+    const dailyBalances = Object.keys(deltaMap).sort().map(d => {
+      running += deltaMap[d];
       return { date: d, balance: Math.round(running * 100) / 100 };
     });
 
-    res.json({ count: bankEntries.length, sample: bankEntries.slice(0, 3), dailyBalances: days });
+    res.json({
+      totalEntries: bankEntries.length,
+      dailyBalances
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

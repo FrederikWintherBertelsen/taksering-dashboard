@@ -42,8 +42,12 @@ app.post('/api/login', (req, res) => {
 function draftAmountDKK(e) {
   const rate = (e.exchangeRate || 100) / 100;
   if (e.entryTypeNumber === 3) {
-    return Math.abs(e.amount || 0) * rate;
+    // Leverandørpostering: abs beløb, divider med moms hvis relevant
+    const dkk = Math.abs(e.amount || 0) * rate;
+    const hasVat = e.contraVatCode || e.vatCode;
+    return hasVat ? dkk / 1.25 : dkk;
   } else {
+    // Finanspostering (type 5): bevar fortegn, ingen moms-division
     return (e.amount || 0) * rate;
   }
 }

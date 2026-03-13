@@ -17,7 +17,8 @@ const HEADERS = {
   'X-AgreementGrantToken': GRANT,
   'Content-Type': 'application/json'
 };
-const BASE = 'https://restapi.e-conomic.com';
+const BASE      = 'https://restapi.e-conomic.com';
+const BASE_NEW  = 'https://apis.e-conomic.com/journalsapi/v1';
 
 const PL_MAP = {
   revenue:      { from: 1004, to: 1030 },
@@ -42,6 +43,7 @@ app.get('/api/test-pl', async (req, res) => {
     const year = 2026;
     const month = 2;
 
+    // Bogførte entries
     let booked = [];
     let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
     while (url) {
@@ -52,34 +54,32 @@ app.get('/api/test-pl', async (req, res) => {
     }
     booked = booked.filter(e => new Date(e.date).getMonth() + 1 === month);
 
+    // Nye draft-entries fra apis.e-conomic.com
     let drafts = [];
-    const journalNums = [1, 2, 3, 8, 11, 12, 13];
-    for (const jNum of journalNums) {
-      let jUrl = `${BASE}/journals/${jNum}/entries?pagesize=1000&skippages=0`;
-      while (jUrl) {
-        const r = await fetch(jUrl, { headers: HEADERS });
-        const d = await r.json();
-        const entries = (d.collection || []).filter(e => e.date && new Date(e.date).getFullYear() === year && new Date(e.date).getMonth() + 1 === month);
-        drafts = drafts.concat(entries);
-        jUrl = d.pagination?.nextPage || null;
-      }
+    let dUrl = `${BASE_NEW}/draft-entries?pagesize=1000&skippages=0`;
+    while (dUrl) {
+      const r = await fetch(dUrl, { headers: HEADERS });
+      const d = await r.json();
+      const entries = (d.collection || d.items || []).filter(e => {
+        if (!e.date && !e.Date) return false;
+        const date = new Date(e.date || e.Date);
+        return date.getFullYear() === year && date.getMonth() + 1 === month;
+      });
+      drafts = drafts.concat(entries);
+      dUrl = d.pagination?.nextPage || d.links?.next || null;
     }
 
-    const combined = [...booked, ...drafts];
-
     // Per-konto breakdown for admin (3600-3790)
+    const combined = [...booked, ...drafts];
     const adminAccounts = {};
     combined.forEach(e => {
-      const acc = e.account?.accountNumber || 0;
+      const acc = e.account?.accountNumber || e.AccountNumber || e.accountNumber || 0;
       if (acc >= 3600 && acc <= 3790) {
         if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 };
-        const isBooked = !e.journal; // bogførte entries har ikke journal-felt
-        if (e.journal) adminAccounts[acc].drafts += e.amount || 0;
-        else adminAccounts[acc].booked += e.amount || 0;
+        if (e.journal || e.JournalNumber) adminAccounts[acc].drafts += e.amount || e.Amount || 0;
+        else adminAccounts[acc].booked += e.amount || e.Amount || 0;
       }
     });
-
-    // Rund af
     Object.keys(adminAccounts).forEach(k => {
       adminAccounts[k].booked = Math.round(adminAccounts[k].booked);
       adminAccounts[k].drafts = Math.round(adminAccounts[k].drafts);
@@ -88,7 +88,10 @@ app.get('/api/test-pl', async (req, res) => {
 
     const cats = Object.entries(PL_MAP).map(([name, range]) => {
       const b = booked.filter(e => inRange(e.account?.accountNumber || 0, range)).reduce((s, e) => s + (e.amount || 0), 0);
-      const d = drafts.filter(e => inRange(e.account?.accountNumber || 0, range)).reduce((s, e) => s + (e.amount || 0), 0);
+      const d = drafts.filter(e => {
+        const acc = e.account?.accountNumber || e.AccountNumber || e.accountNumber || 0;
+        return inRange(acc, range);
+      }).reduce((s, e) => s + (e.amount || e.Amount || 0), 0);
       return { name, range: `${range.from}-${range.to}`, booked: Math.round(b), drafts: Math.round(d), combined: Math.round(b + d) };
     });
 
@@ -96,7 +99,24 @@ app.get('/api/test-pl', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+async function fetchAllDraftEntries(year) {
+  let drafts = [];
+  let url = `${BASE_NEW}/draft-entries?pagesize=1000&skippages=0`;
+  while (url) {
+    const r = await fetch(url, { headers: HEADERS });
+    const d = await r.json();
+    const entries = (d.collection || d.items || []).filter(e => {
+      if (!e.date && !e.Date) return false;
+      return new Date(e.date || e.Date).getFullYear() === year;
+    });
+    drafts = drafts.concat(entries);
+    url = d.pagination?.nextPage || d.links?.next || null;
+  }
+  return drafts;
+}
+
 async function fetchAllEntries(year) {
+  // Bogførte
   let all = [];
   let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
   while (url) {
@@ -106,20 +126,9 @@ async function fetchAllEntries(year) {
     url = d.pagination?.nextPage || null;
   }
 
-  const journalNums = [1, 2, 3, 8, 11, 12, 13];
-  for (const jNum of journalNums) {
-    let jUrl = `${BASE}/journals/${jNum}/entries?pagesize=1000&skippages=0`;
-    while (jUrl) {
-      const r = await fetch(jUrl, { headers: HEADERS });
-      const d = await r.json();
-      const entries = (d.collection || []).filter(e => {
-        if (!e.date) return false;
-        return new Date(e.date).getFullYear() === year;
-      });
-      all = all.concat(entries);
-      jUrl = d.pagination?.nextPage || null;
-    }
-  }
+  // Kladder fra nyt API
+  const drafts = await fetchAllDraftEntries(year);
+  all = all.concat(drafts);
 
   return all;
 }
@@ -140,8 +149,12 @@ function inRange(acc, range) { return acc >= range.from && acc <= range.to; }
 
 function sumCat(entries, range, month) {
   return entries
-    .filter(e => new Date(e.date).getMonth() + 1 === month && inRange(e.account?.accountNumber || 0, range))
-    .reduce((s, e) => s + (e.amount || 0), 0);
+    .filter(e => {
+      const date = new Date(e.date || e.Date);
+      const acc = e.account?.accountNumber || e.AccountNumber || e.accountNumber || 0;
+      return date.getMonth() + 1 === month && inRange(acc, range);
+    })
+    .reduce((s, e) => s + (e.amount || e.Amount || 0), 0);
 }
 
 app.get('/api/revenue', async (req, res) => {
@@ -185,13 +198,16 @@ app.get('/api/liquidity', async (req, res) => {
     for (const y of years) all = all.concat(await fetchAllEntries(y));
 
     const bankEntries = all
-      .filter(e => (e.account?.accountNumber || 0) === BANK_ACCOUNT && e.date >= fromStr && e.date <= toStr)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+      .filter(e => {
+        const acc = e.account?.accountNumber || e.AccountNumber || e.accountNumber || 0;
+        return acc === BANK_ACCOUNT && e.date >= fromStr && e.date <= toStr;
+      })
+      .sort((a, b) => new Date(a.date || a.Date) - new Date(b.date || b.Date));
 
     const dailyMap = {};
     bankEntries.forEach(e => {
-      const day = e.date.split('T')[0];
-      dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
+      const day = (e.date || e.Date).split('T')[0];
+      dailyMap[day] = (dailyMap[day] || 0) + (e.amount || e.Amount || 0);
     });
 
     const allDates = Object.keys(dailyMap).sort();

@@ -1,4 +1,4 @@
-// v22
+// v23
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -57,14 +57,16 @@ function draftAmountDKK(e) {
   }
 }
 
-function bankAmount(e) {
-  if (e.entryTypeNumber === 3) return -(e.amount || 0);
-  return e.amount || 0;
+function isBankEntry(e) {
+  const acc = e.account?.accountNumber || e.accountNumber || 0;
+  const contra = e.contraAccountNumber || 0;
+  return acc === BANK_ACCOUNT || contra === BANK_ACCOUNT;
 }
 
-function isBankEntry(e) {
-  if (e.entryTypeNumber === 3) return (e.contraAccountNumber || 0) === BANK_ACCOUNT;
-  return (e.account?.accountNumber || e.accountNumber || 0) === BANK_ACCOUNT;
+function bankAmount(e) {
+  const acc = e.account?.accountNumber || e.accountNumber || 0;
+  if (acc === BANK_ACCOUNT) return e.amount || 0;
+  return -(e.amount || 0);
 }
 
 async function fetchAllJournals() {

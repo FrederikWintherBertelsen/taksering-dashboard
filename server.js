@@ -100,7 +100,9 @@ function sumCat(entries, range, month) {
   return entries
     .filter(e => {
       const date = new Date(e.date);
-      const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.account?.accountNumber || e.accountNumber || 0);
+      const acc = e.entryTypeNumber === 3
+        ? (e.contraAccountNumber || 0)
+        : (e.account?.accountNumber || e.accountNumber || 0);
       return date.getMonth() + 1 === month && inRange(acc, range);
     })
     .reduce((s, e) => {
@@ -112,7 +114,11 @@ function sumCat(entries, range, month) {
 app.get('/api/revenue', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const [entries, invoices] = await Promise.all([fetchAllEntries(year), fetchAllInvoices(year)]);
+    const [entries, invoices] = await Promise.all([
+      fetchAllEntries(year),
+      fetchAllInvoices(year)
+    ]);
+
     const seen = new Set();
     const months = Array.from({length: 12}, (_, i) => {
       const m = i + 1;
@@ -129,6 +135,7 @@ app.get('/api/revenue', async (req, res) => {
       cids.forEach(c => seen.add(c));
       return { month: m, revenue, cogs, salaries, salesCosts, rent, adminCosts, financial, customers: cids.length, newCustomers };
     });
+
     res.json({ year, months });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -143,30 +150,39 @@ app.get('/api/liquidity', async (req, res) => {
     const toDate  = endDate < today ? endDate : today;
     const toStr   = toDate.toISOString().split('T')[0];
 
-    const from    = new Date(toDate);
-    from.setDate(from.getDate() - 90);
-    const fromStr = from.toISOString().split('T')[0];
-
-    const years = [...new Set([from.getFullYear(), toDate.getFullYear()])];
+    // Hent ALLE år fra starten for korrekt akkumuleret ultimosaldo
+    const startYear = 2020;
+    const currentYear = toDate.getFullYear();
     let all = [];
-    for (const y of years) all = all.concat(await fetchAllEntries(y));
+    for (let y = startYear; y <= currentYear; y++) {
+      all = all.concat(await fetchAllEntries(y));
+    }
 
+    // Filtrer kun bankkonto og frem til slutdato
     const bankEntries = all
       .filter(e => {
         const acc = e.account?.accountNumber || 0;
         const dateStr = (e.date || '').split('T')[0];
-        return acc === BANK_ACCOUNT && dateStr >= fromStr && dateStr <= toStr;
+        return acc === BANK_ACCOUNT && dateStr <= toStr;
       })
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    // Byg daglig kumulativ saldo fra dag 1
     const dailyMap = {};
-    bankEntries.forEach(e => { const day = e.date.split('T')[0]; dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0); });
+    bankEntries.forEach(e => {
+      const day = e.date.split('T')[0];
+      dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
+    });
+
     const allDates = Object.keys(dailyMap).sort();
     let running = 0;
     const cumulMap = {};
     allDates.forEach(d => { running += dailyMap[d]; cumulMap[d] = running; });
 
+    // Vis kun de sidste 90 dage frem til slutdato
     const cutoff = new Date(toDate); cutoff.setDate(toDate.getDate() - 90);
+
+    // Find saldo på cutoff-datoen (carry forward fra tidligere)
     let lastKnown = 0;
     allDates.forEach(d => { if (new Date(d) <= cutoff) lastKnown = cumulMap[d]; });
 

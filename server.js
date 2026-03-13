@@ -38,12 +38,22 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
+// Test: vis rå svar fra nyt draft-entries API
+app.get('/api/test-drafts', async (req, res) => {
+  try {
+    const r = await fetch(`${BASE_NEW}/draft-entries?pageSize=5`, { headers: HEADERS });
+    const d = await r.json();
+    res.json({ status: r.status, data: d });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/test-pl', async (req, res) => {
   try {
     const year = 2026;
     const month = 2;
 
-    // Bogførte entries
     let booked = [];
     let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
     while (url) {
@@ -54,29 +64,29 @@ app.get('/api/test-pl', async (req, res) => {
     }
     booked = booked.filter(e => new Date(e.date).getMonth() + 1 === month);
 
-    // Nye draft-entries fra apis.e-conomic.com
     let drafts = [];
-    let dUrl = `${BASE_NEW}/draft-entries?pagesize=1000&skippages=0`;
+    let dUrl = `${BASE_NEW}/draft-entries?pageSize=1000`;
     while (dUrl) {
       const r = await fetch(dUrl, { headers: HEADERS });
       const d = await r.json();
-      const entries = (d.collection || d.items || []).filter(e => {
-        if (!e.date && !e.Date) return false;
-        const date = new Date(e.date || e.Date);
+      const items = d.collection || d.items || d.data || [];
+      const entries = items.filter(e => {
+        const dateStr = e.date || e.Date;
+        if (!dateStr) return false;
+        const date = new Date(dateStr);
         return date.getFullYear() === year && date.getMonth() + 1 === month;
       });
       drafts = drafts.concat(entries);
       dUrl = d.pagination?.nextPage || d.links?.next || null;
     }
 
-    // Per-konto breakdown for admin (3600-3790)
     const combined = [...booked, ...drafts];
     const adminAccounts = {};
     combined.forEach(e => {
       const acc = e.account?.accountNumber || e.AccountNumber || e.accountNumber || 0;
       if (acc >= 3600 && acc <= 3790) {
         if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 };
-        if (e.journal || e.JournalNumber) adminAccounts[acc].drafts += e.amount || e.Amount || 0;
+        if (e.journal || e.JournalNumber || e.journalNumber) adminAccounts[acc].drafts += e.amount || e.Amount || 0;
         else adminAccounts[acc].booked += e.amount || e.Amount || 0;
       }
     });
@@ -101,13 +111,15 @@ app.get('/api/test-pl', async (req, res) => {
 
 async function fetchAllDraftEntries(year) {
   let drafts = [];
-  let url = `${BASE_NEW}/draft-entries?pagesize=1000&skippages=0`;
+  let url = `${BASE_NEW}/draft-entries?pageSize=1000`;
   while (url) {
     const r = await fetch(url, { headers: HEADERS });
     const d = await r.json();
-    const entries = (d.collection || d.items || []).filter(e => {
-      if (!e.date && !e.Date) return false;
-      return new Date(e.date || e.Date).getFullYear() === year;
+    const items = d.collection || d.items || d.data || [];
+    const entries = items.filter(e => {
+      const dateStr = e.date || e.Date;
+      if (!dateStr) return false;
+      return new Date(dateStr).getFullYear() === year;
     });
     drafts = drafts.concat(entries);
     url = d.pagination?.nextPage || d.links?.next || null;
@@ -116,7 +128,6 @@ async function fetchAllDraftEntries(year) {
 }
 
 async function fetchAllEntries(year) {
-  // Bogførte
   let all = [];
   let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
   while (url) {
@@ -125,11 +136,8 @@ async function fetchAllEntries(year) {
     all = all.concat(d.collection || []);
     url = d.pagination?.nextPage || null;
   }
-
-  // Kladder fra nyt API
   const drafts = await fetchAllDraftEntries(year);
   all = all.concat(drafts);
-
   return all;
 }
 
@@ -200,7 +208,8 @@ app.get('/api/liquidity', async (req, res) => {
     const bankEntries = all
       .filter(e => {
         const acc = e.account?.accountNumber || e.AccountNumber || e.accountNumber || 0;
-        return acc === BANK_ACCOUNT && e.date >= fromStr && e.date <= toStr;
+        const dateStr = (e.date || e.Date || '').split('T')[0];
+        return acc === BANK_ACCOUNT && dateStr >= fromStr && dateStr <= toStr;
       })
       .sort((a, b) => new Date(a.date || a.Date) - new Date(b.date || b.Date));
 

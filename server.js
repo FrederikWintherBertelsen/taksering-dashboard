@@ -1,4 +1,4 @@
-// v8
+// v9
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -150,12 +150,12 @@ app.get('/api/liquidity', async (req, res) => {
     const toDate  = endDate < today ? endDate : today;
     const toStr   = toDate.toISOString().split('T')[0];
 
-    const startYear = 2020;
     const currentYear = toDate.getFullYear();
 
-    // Hent bogførte entries for alle år parallelt, spring over hvis året ikke findes
-    async function fetchBookedOnly(y) {
-      let all = [];
+    // Hent kun 2025 og 2026 (saldo starter fra 1.1.2025)
+    const fetchYears = [2025, 2026].filter(y => y <= currentYear);
+    let all = [];
+    for (const y of fetchYears) {
       let url = `${BASE}/accounting-years/${y}/entries?pagesize=1000&skippages=0`;
       while (url) {
         const r = await fetch(url, { headers: HEADERS });
@@ -164,14 +164,9 @@ app.get('/api/liquidity', async (req, res) => {
         all = all.concat(d.collection || []);
         url = d.pagination?.nextPage || null;
       }
-      return all;
     }
 
-    const years = Array.from({length: currentYear - startYear + 1}, (_, i) => startYear + i);
-    const allYears = await Promise.all(years.map(y => fetchBookedOnly(y)));
-    let all = allYears.flat();
-
-    // Tilføj kladder kun for indeværende år
+    // Tilføj kladder for indeværende år
     const drafts = await fetchAllDraftEntries(currentYear);
     all = all.concat(drafts);
 

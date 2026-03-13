@@ -18,7 +18,7 @@ const HEADERS = {
   'Content-Type': 'application/json'
 };
 const BASE      = 'https://restapi.e-conomic.com';
-const BASE_NEW  = 'https://apis.e-conomic.com/journalsapi/v1';
+const BASE_NEW  = 'https://apis.e-conomic.com/journalsapi/v14.0.1';
 
 const PL_MAP = {
   revenue:      { from: 1004, to: 1030 },
@@ -41,9 +41,9 @@ app.post('/api/login', (req, res) => {
 // Test: vis rå svar fra nyt draft-entries API
 app.get('/api/test-drafts', async (req, res) => {
   try {
-    const r = await fetch(`${BASE_NEW}/draft-entries?pageSize=5`, { headers: HEADERS });
-    const d = await r.json();
-    res.json({ status: r.status, data: d });
+    const r = await fetch(`${BASE_NEW}/draft-entries`, { headers: HEADERS });
+    const text = await r.text();
+    res.json({ status: r.status, raw: JSON.parse(text) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -64,20 +64,23 @@ app.get('/api/test-pl', async (req, res) => {
     }
     booked = booked.filter(e => new Date(e.date).getMonth() + 1 === month);
 
+    // Nyt API med cursor pagination
     let drafts = [];
-    let dUrl = `${BASE_NEW}/draft-entries?pageSize=1000`;
+    let dUrl = `${BASE_NEW}/draft-entries`;
     while (dUrl) {
       const r = await fetch(dUrl, { headers: HEADERS });
       const d = await r.json();
-      const items = d.collection || d.items || d.data || [];
-      const entries = items.filter(e => {
+      // Nyt API returnerer array direkte eller under et felt
+      const items = Array.isArray(d) ? d : (d.collection || d.items || d.data || d.entries || []);
+      const filtered = items.filter(e => {
         const dateStr = e.date || e.Date;
         if (!dateStr) return false;
         const date = new Date(dateStr);
         return date.getFullYear() === year && date.getMonth() + 1 === month;
       });
-      drafts = drafts.concat(entries);
-      dUrl = d.pagination?.nextPage || d.links?.next || null;
+      drafts = drafts.concat(filtered);
+      // Cursor pagination
+      dUrl = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
     }
 
     const combined = [...booked, ...drafts];
@@ -111,18 +114,18 @@ app.get('/api/test-pl', async (req, res) => {
 
 async function fetchAllDraftEntries(year) {
   let drafts = [];
-  let url = `${BASE_NEW}/draft-entries?pageSize=1000`;
+  let url = `${BASE_NEW}/draft-entries`;
   while (url) {
     const r = await fetch(url, { headers: HEADERS });
     const d = await r.json();
-    const items = d.collection || d.items || d.data || [];
-    const entries = items.filter(e => {
+    const items = Array.isArray(d) ? d : (d.collection || d.items || d.data || d.entries || []);
+    const filtered = items.filter(e => {
       const dateStr = e.date || e.Date;
       if (!dateStr) return false;
       return new Date(dateStr).getFullYear() === year;
     });
-    drafts = drafts.concat(entries);
-    url = d.pagination?.nextPage || d.links?.next || null;
+    drafts = drafts.concat(filtered);
+    url = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
   }
   return drafts;
 }

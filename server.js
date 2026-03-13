@@ -1,4 +1,4 @@
-// v16
+// v17
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -73,6 +73,27 @@ async function fetchAllDraftEntries(year) {
   return drafts;
 }
 
+async function fetchAllCashbookEntries(year) {
+  let all = [];
+  try {
+    const cbRes = await fetch(`${BASE}/cashbooks`, { headers: HEADERS });
+    const cbData = await cbRes.json();
+    const cashbooks = cbData.collection || [];
+    for (const cb of cashbooks) {
+      const entriesRes = await fetch(`${BASE}/cashbooks/${cb.cashBookNumber}/entries?pagesize=1000`, { headers: HEADERS });
+      const entriesData = await entriesRes.json();
+      const items = (entriesData.collection || []).filter(e => {
+        if (!e.date) return false;
+        return new Date(e.date).getFullYear() === year;
+      });
+      all = all.concat(items);
+    }
+  } catch (e) {
+    // cashbooks ikke tilgængelige
+  }
+  return all;
+}
+
 async function fetchEntriesForYear(year) {
   let all = [];
   let page = 0;
@@ -90,7 +111,8 @@ async function fetchEntriesForYear(year) {
 async function fetchAllEntries(year) {
   const entries = await fetchEntriesForYear(year);
   const drafts  = await fetchAllDraftEntries(year);
-  return entries.concat(drafts);
+  const cashbook = await fetchAllCashbookEntries(year);
+  return entries.concat(drafts).concat(cashbook);
 }
 
 async function fetchAllInvoices(year) {
@@ -292,6 +314,26 @@ app.get('/api/debug/drafts', async (req, res) => {
     const drafts = await fetchAllDraftEntries(year);
     const bank = drafts.filter(e => (e.accountNumber || 0) === BANK_ACCOUNT);
     res.json({ count: bank.length, entries: bank });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/debug/cashbooks', async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const cbRes = await fetch(`${BASE}/cashbooks`, { headers: HEADERS });
+    const cbData = await cbRes.json();
+    const cashbooks = cbData.collection || [];
+    const result = [];
+    for (const cb of cashbooks) {
+      const entriesRes = await fetch(`${BASE}/cashbooks/${cb.cashBookNumber}/entries?pagesize=1000`, { headers: HEADERS });
+      const entriesData = await entriesRes.json();
+      const bank = (entriesData.collection || []).filter(e => {
+        const acc = e.account?.accountNumber || e.accountNumber || 0;
+        return acc === BANK_ACCOUNT && new Date(e.date).getFullYear() === year;
+      });
+      result.push({ cashbook: cb, bankEntries: bank });
+    }
+    res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

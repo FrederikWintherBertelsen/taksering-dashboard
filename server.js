@@ -1,4 +1,4 @@
-// v13
+// v14
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -163,8 +163,8 @@ app.get('/api/liquidity', async (req, res) => {
 
     const openingBalance = OPENING_BALANCES[year] || 0;
 
-    // Kun bogførte posteringer — kladder medtages ikke
-    const all = await fetchEntriesForYear(year);
+    // Bogførte + kladder — samme tilgang som P/L
+    const all = await fetchAllEntries(year);
 
     const bankEntries = all
       .filter(e => {
@@ -181,7 +181,8 @@ app.get('/api/liquidity', async (req, res) => {
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      deltaMap[day] = (deltaMap[day] || 0) + (e.amount || 0);
+      const amount = e.account ? (e.amount || 0) : draftAmountDKK(e);
+      deltaMap[day] = (deltaMap[day] || 0) + amount;
     });
 
     let running = openingBalance;
@@ -265,9 +266,8 @@ app.get('/api/orders', async (req, res) => {
 app.get('/api/debug/bank', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const r = await fetch(`${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`, { headers: HEADERS });
-    const d = await r.json();
-    const bankEntries = (d.collection || [])
+    const all = await fetchAllEntries(year);
+    const bankEntries = all
       .filter(e => (e.account?.accountNumber || e.accountNumber) === BANK_ACCOUNT)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -275,7 +275,8 @@ app.get('/api/debug/bank', async (req, res) => {
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      deltaMap[day] = (deltaMap[day] || 0) + (e.amount || 0);
+      const amount = e.account ? (e.amount || 0) : draftAmountDKK(e);
+      deltaMap[day] = (deltaMap[day] || 0) + amount;
     });
 
     let running = openingBalance;

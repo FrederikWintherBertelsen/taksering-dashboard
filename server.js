@@ -1,4 +1,4 @@
-// v6
+// v7
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -145,29 +145,43 @@ app.get('/api/liquidity', async (req, res) => {
     const year  = parseInt(req.query.year)  || new Date().getFullYear();
     const month = parseInt(req.query.month) || new Date().getMonth() + 1;
 
-    const endDate = new Date(year, month, 0); // sidste dag i valgt måned
+    const endDate = new Date(year, month, 0);
     const today   = new Date();
     const toDate  = endDate < today ? endDate : today;
     const toStr   = toDate.toISOString().split('T')[0];
 
-    // Hent ALLE år fra starten for korrekt akkumuleret ultimosaldo
     const startYear = 2020;
     const currentYear = toDate.getFullYear();
-    let all = [];
-    for (let y = startYear; y <= currentYear; y++) {
-      all = all.concat(await fetchAllEntries(y));
+
+    // Hent bogførte entries for alle år parallelt
+    async function fetchBookedOnly(y) {
+      let all = [];
+      let url = `${BASE}/accounting-years/${y}/entries?pagesize=1000&skippages=0`;
+      while (url) {
+        const r = await fetch(url, { headers: HEADERS });
+        const d = await r.json();
+        all = all.concat(d.collection || []);
+        url = d.pagination?.nextPage || null;
+      }
+      return all;
     }
 
-    // Filtrer kun bankkonto og frem til slutdato
+    const years = Array.from({length: currentYear - startYear + 1}, (_, i) => startYear + i);
+    const allYears = await Promise.all(years.map(y => fetchBookedOnly(y)));
+    let all = allYears.flat();
+
+    // Tilføj kladder kun for indeværende år
+    const drafts = await fetchAllDraftEntries(currentYear);
+    all = all.concat(drafts);
+
     const bankEntries = all
       .filter(e => {
-        const acc = e.account?.accountNumber || 0;
+        const acc = e.account?.accountNumber || e.accountNumber || 0;
         const dateStr = (e.date || '').split('T')[0];
         return acc === BANK_ACCOUNT && dateStr <= toStr;
       })
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Byg daglig kumulativ saldo fra dag 1
     const dailyMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
@@ -179,10 +193,7 @@ app.get('/api/liquidity', async (req, res) => {
     const cumulMap = {};
     allDates.forEach(d => { running += dailyMap[d]; cumulMap[d] = running; });
 
-    // Vis kun de sidste 90 dage frem til slutdato
     const cutoff = new Date(toDate); cutoff.setDate(toDate.getDate() - 90);
-
-    // Find saldo på cutoff-datoen (carry forward fra tidligere)
     let lastKnown = 0;
     allDates.forEach(d => { if (new Date(d) <= cutoff) lastKnown = cumulMap[d]; });
 

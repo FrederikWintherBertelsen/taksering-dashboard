@@ -278,20 +278,38 @@ app.get('/api/orders', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Debug endpoint — log første bankkonto-postering så vi kan se feltstrukturen
+// Debug endpoint — viser alle bankposteringer med akkumuleret saldo dag for dag
 app.get('/api/debug/bank', async (req, res) => {
   try {
-    const year = new Date().getFullYear();
-    let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
+    const fetchYears = [2025, 2026];
     let all = [];
-    while (url) {
-      const r = await fetch(url, { headers: HEADERS });
-      const d = await r.json();
-      all = all.concat(d.collection || []);
-      url = d.pagination?.nextPage || null;
+    for (const y of fetchYears) {
+      let url = `${BASE}/accounting-years/${y}/entries?pagesize=1000&skippages=0`;
+      while (url) {
+        const r = await fetch(url, { headers: HEADERS });
+        if (!r.ok) break;
+        const d = await r.json();
+        all = all.concat(d.collection || []);
+        url = d.pagination?.nextPage || null;
+      }
     }
-    const bankEntries = all.filter(e => (e.account?.accountNumber || e.accountNumber) === BANK_ACCOUNT);
-    res.json({ count: bankEntries.length, sample: bankEntries.slice(0, 3) });
+    const bankEntries = all
+      .filter(e => (e.account?.accountNumber || e.accountNumber) === BANK_ACCOUNT)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Byg daglig saldo via akkumulering
+    const dailyMap = {};
+    bankEntries.forEach(e => {
+      const day = e.date.split('T')[0];
+      dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
+    });
+    let running = 0;
+    const days = Object.keys(dailyMap).sort().map(d => {
+      running += dailyMap[d];
+      return { date: d, balance: Math.round(running * 100) / 100 };
+    });
+
+    res.json({ count: bankEntries.length, sample: bankEntries.slice(0, 3), dailyBalances: days });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

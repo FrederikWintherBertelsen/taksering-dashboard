@@ -1,4 +1,4 @@
-// v9
+// v10
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -32,7 +32,7 @@ const PL_MAP = {
   financial:    { from: 4310, to: 4481 },
 };
 
-const BANK_ACCOUNT = 6750;
+const BANK_ACCOUNT = 5830;
 
 app.post('/api/login', (req, res) => {
   if (req.body.password === PASSWORD) res.json({ ok: true });
@@ -152,7 +152,7 @@ app.get('/api/liquidity', async (req, res) => {
 
     const currentYear = toDate.getFullYear();
 
-    // Hent kun 2025 og 2026 (saldo starter fra 1.1.2025)
+    // Hent 2025 og frem
     const fetchYears = [2025, 2026].filter(y => y <= currentYear);
     let all = [];
     for (const y of fetchYears) {
@@ -170,6 +170,7 @@ app.get('/api/liquidity', async (req, res) => {
     const drafts = await fetchAllDraftEntries(currentYear);
     all = all.concat(drafts);
 
+    // Filtrer kun konto 5830, sorter kronologisk
     const bankEntries = all
       .filter(e => {
         const acc = e.account?.accountNumber || e.accountNumber || 0;
@@ -178,25 +179,48 @@ app.get('/api/liquidity', async (req, res) => {
       })
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    // Byg daglig saldo:
+    // Hvis e-conomic returnerer et 'balance'-felt, brug den direkte (sidst kendte saldo på dagen).
+    // Ellers akkumuler 'amount' fra nul.
+    const hasBalance = bankEntries.some(e => e.balance !== undefined && e.balance !== null);
+
     const dailyMap = {};
-    bankEntries.forEach(e => {
-      const day = e.date.split('T')[0];
-      dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
-    });
+    if (hasBalance) {
+      // Brug det løbende balance-felt — tag den sidst bogførte saldo per dag
+      bankEntries.forEach(e => {
+        const day = e.date.split('T')[0];
+        if (e.balance !== undefined && e.balance !== null) {
+          dailyMap[day] = e.balance;
+        }
+      });
+    } else {
+      // Fallback: akkumuler amount
+      bankEntries.forEach(e => {
+        const day = e.date.split('T')[0];
+        dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
+      });
+
+      // Lav løbende sum
+      const allDays = Object.keys(dailyMap).sort();
+      let running = 0;
+      allDays.forEach(d => {
+        running += dailyMap[d];
+        dailyMap[d] = running;
+      });
+    }
+
+    // Byg 90-dages serie med forward-fill (carry last known balance)
+    const cutoff = new Date(toDate);
+    cutoff.setDate(toDate.getDate() - 90);
 
     const allDates = Object.keys(dailyMap).sort();
-    let running = 0;
-    const cumulMap = {};
-    allDates.forEach(d => { running += dailyMap[d]; cumulMap[d] = running; });
-
-    const cutoff = new Date(toDate); cutoff.setDate(toDate.getDate() - 90);
     let lastKnown = 0;
-    allDates.forEach(d => { if (new Date(d) <= cutoff) lastKnown = cumulMap[d]; });
+    allDates.forEach(d => { if (new Date(d) <= cutoff) lastKnown = dailyMap[d]; });
 
     const days = [];
     for (let d = new Date(cutoff); d <= toDate; d.setDate(d.getDate() + 1)) {
       const ds = d.toISOString().split('T')[0];
-      if (cumulMap[ds] !== undefined) lastKnown = cumulMap[ds];
+      if (dailyMap[ds] !== undefined) lastKnown = dailyMap[ds];
       days.push({ date: ds, balance: lastKnown });
     }
 
@@ -251,6 +275,23 @@ app.get('/api/orders', async (req, res) => {
     const r = await fetch(`${BASE}/orders/drafts?pagesize=100`, { headers: HEADERS });
     const d = await r.json();
     res.json({ orders: d.collection || [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Debug endpoint — log første bankkonto-postering så vi kan se feltstrukturen
+app.get('/api/debug/bank', async (req, res) => {
+  try {
+    const year = new Date().getFullYear();
+    let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
+    let all = [];
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      all = all.concat(d.collection || []);
+      url = d.pagination?.nextPage || null;
+    }
+    const bankEntries = all.filter(e => (e.account?.accountNumber || e.accountNumber) === BANK_ACCOUNT);
+    res.json({ count: bankEntries.length, sample: bankEntries.slice(0, 3) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

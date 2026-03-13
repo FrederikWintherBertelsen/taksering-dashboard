@@ -1,4 +1,4 @@
-// v14
+// v15
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -163,7 +163,7 @@ app.get('/api/liquidity', async (req, res) => {
 
     const openingBalance = OPENING_BALANCES[year] || 0;
 
-    // Bogførte + kladder — samme tilgang som P/L
+    // Bogførte + kladder
     const all = await fetchAllEntries(year);
 
     const bankEntries = all
@@ -181,7 +181,8 @@ app.get('/api/liquidity', async (req, res) => {
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      const amount = e.account ? (e.amount || 0) : draftAmountDKK(e);
+      // Bankkonto: altid råbeløb uden momskorrektion
+      const amount = e.amount || 0;
       deltaMap[day] = (deltaMap[day] || 0) + amount;
     });
 
@@ -275,8 +276,7 @@ app.get('/api/debug/bank', async (req, res) => {
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      const amount = e.account ? (e.amount || 0) : draftAmountDKK(e);
-      deltaMap[day] = (deltaMap[day] || 0) + amount;
+      deltaMap[day] = (deltaMap[day] || 0) + (e.amount || 0);
     });
 
     let running = openingBalance;

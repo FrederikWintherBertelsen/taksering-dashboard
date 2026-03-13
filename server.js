@@ -1,4 +1,4 @@
-// v3
+// v4
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -40,11 +40,18 @@ app.post('/api/login', (req, res) => {
 });
 
 function draftAmountDKKExVat(e) {
-  const raw = Math.abs(e.amount || 0);
   const rate = (e.exchangeRate || 100) / 100;
-  const dkk = raw * rate;
-  const hasVat = e.contraVatCode || e.vatCode;
-  return hasVat ? dkk / 1.25 : dkk;
+  if (e.entryTypeNumber === 3) {
+    // Leverandørpostering: beløb er negativt, tag absolut og omregn
+    const dkk = Math.abs(e.amount || 0) * rate;
+    const hasVat = e.contraVatCode || e.vatCode;
+    return hasVat ? dkk / 1.25 : dkk;
+  } else {
+    // Finanspostering: bevar fortegn
+    const dkk = (e.amount || 0) * rate;
+    const hasVat = e.contraVatCode || e.vatCode;
+    return hasVat ? dkk / 1.25 : dkk;
+  }
 }
 
 app.get('/api/test-pl', async (req, res) => {
@@ -103,7 +110,7 @@ app.get('/api/test-pl', async (req, res) => {
     booked.forEach(e => {
       const acc = e.account?.accountNumber || 0;
       if (acc >= 2210 && acc <= 2285) {
-        if (!salaryAccounts[acc]) salaryAccounts[acc] = { booked: 0, drafts: 0, bookedEntries: [] };
+        if (!salaryAccounts[acc]) salaryAccounts[acc] = { booked: 0, drafts: 0 };
         salaryAccounts[acc].booked += e.amount || 0;
       }
     });
@@ -112,9 +119,6 @@ app.get('/api/test-pl', async (req, res) => {
       if (acc >= 2210 && acc <= 2285) {
         if (!salaryAccounts[acc]) salaryAccounts[acc] = { booked: 0, drafts: 0 };
         salaryAccounts[acc].drafts += draftAmountDKKExVat(e);
-        // Gem rå entry for debugging
-        if (!salaryAccounts[acc].draftEntries) salaryAccounts[acc].draftEntries = [];
-        salaryAccounts[acc].draftEntries.push({ entryNumber: e.entryNumber, amount: e.amount, exchangeRate: e.exchangeRate, vatCode: e.vatCode, contraVatCode: e.contraVatCode, text: e.text, entryTypeNumber: e.entryTypeNumber });
       }
     });
     Object.keys(salaryAccounts).forEach(k => {

@@ -135,29 +135,48 @@ app.get('/api/revenue', async (req, res) => {
 
 app.get('/api/liquidity', async (req, res) => {
   try {
-    const today = new Date();
-    const toStr = today.toISOString().split('T')[0];
-    const from  = new Date(today); from.setDate(today.getDate() - 180);
+    const year  = parseInt(req.query.year)  || new Date().getFullYear();
+    const month = parseInt(req.query.month) || new Date().getMonth() + 1;
+
+    const endDate = new Date(year, month, 0); // sidste dag i valgt måned
+    const today   = new Date();
+    const toDate  = endDate < today ? endDate : today;
+    const toStr   = toDate.toISOString().split('T')[0];
+
+    const from    = new Date(toDate);
+    from.setDate(from.getDate() - 90);
     const fromStr = from.toISOString().split('T')[0];
-    const years = [...new Set([from.getFullYear(), today.getFullYear()])];
+
+    const years = [...new Set([from.getFullYear(), toDate.getFullYear()])];
     let all = [];
     for (const y of years) all = all.concat(await fetchAllEntries(y));
-    const bankEntries = all.filter(e => { const acc = e.account?.accountNumber || 0; const dateStr = (e.date || '').split('T')[0]; return acc === BANK_ACCOUNT && dateStr >= fromStr && dateStr <= toStr; }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const bankEntries = all
+      .filter(e => {
+        const acc = e.account?.accountNumber || 0;
+        const dateStr = (e.date || '').split('T')[0];
+        return acc === BANK_ACCOUNT && dateStr >= fromStr && dateStr <= toStr;
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
     const dailyMap = {};
     bankEntries.forEach(e => { const day = e.date.split('T')[0]; dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0); });
     const allDates = Object.keys(dailyMap).sort();
     let running = 0;
     const cumulMap = {};
     allDates.forEach(d => { running += dailyMap[d]; cumulMap[d] = running; });
-    const cutoff = new Date(today); cutoff.setDate(today.getDate() - 90);
+
+    const cutoff = new Date(toDate); cutoff.setDate(toDate.getDate() - 90);
     let lastKnown = 0;
     allDates.forEach(d => { if (new Date(d) <= cutoff) lastKnown = cumulMap[d]; });
+
     const days = [];
-    for (let d = new Date(cutoff); d <= today; d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(cutoff); d <= toDate; d.setDate(d.getDate() + 1)) {
       const ds = d.toISOString().split('T')[0];
       if (cumulMap[ds] !== undefined) lastKnown = cumulMap[ds];
       days.push({ date: ds, balance: lastKnown });
     }
+
     res.json({ days });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

@@ -1,4 +1,4 @@
-// v24
+// v25
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -57,12 +57,6 @@ function draftAmountDKK(e) {
   }
 }
 
-function isBankEntry(e) {
-  const acc = e.account?.accountNumber || e.accountNumber || 0;
-  const contra = e.contraAccountNumber || 0;
-  return acc === BANK_ACCOUNT || contra === BANK_ACCOUNT;
-}
-
 function bankAmount(e) {
   const acc = e.account?.accountNumber || e.accountNumber || 0;
   if (acc === BANK_ACCOUNT) return e.amount || 0;
@@ -81,6 +75,7 @@ async function fetchAllJournals() {
   return journals;
 }
 
+// Til P/L — henter alle draft-entries via journal-loop
 async function fetchAllDraftEntries(year) {
   let drafts = [];
   const journals = await fetchAllJournals();
@@ -96,6 +91,36 @@ async function fetchAllDraftEntries(year) {
       drafts = drafts.concat(items);
       url = d.cursor ? `${BASE_NEW}/draft-entries?journalNumber=${journal.number}&cursor=${d.cursor}` : null;
     }
+  }
+  return drafts;
+}
+
+// Til likviditet — henter kun bank-relevante draft-entries direkte
+async function fetchBankDraftEntries(year) {
+  let drafts = [];
+  // Entries hvor 5830 er modkonto
+  let url = `${BASE_NEW}/draft-entries?contraAccountNumber=${BANK_ACCOUNT}`;
+  while (url) {
+    const r = await fetch(url, { headers: HEADERS });
+    const d = await r.json();
+    const items = (d.items || []).filter(e => {
+      if (!e.date) return false;
+      return new Date(e.date).getFullYear() === year;
+    });
+    drafts = drafts.concat(items);
+    url = d.cursor ? `${BASE_NEW}/draft-entries?contraAccountNumber=${BANK_ACCOUNT}&cursor=${d.cursor}` : null;
+  }
+  // Entries hvor 5830 er hovedkonto
+  let url2 = `${BASE_NEW}/draft-entries?accountNumber=${BANK_ACCOUNT}`;
+  while (url2) {
+    const r = await fetch(url2, { headers: HEADERS });
+    const d = await r.json();
+    const items = (d.items || []).filter(e => {
+      if (!e.date) return false;
+      return new Date(e.date).getFullYear() === year;
+    });
+    drafts = drafts.concat(items);
+    url2 = d.cursor ? `${BASE_NEW}/draft-entries?accountNumber=${BANK_ACCOUNT}&cursor=${d.cursor}` : null;
   }
   return drafts;
 }
@@ -133,11 +158,19 @@ async function fetchEntriesForYear(year) {
   return all;
 }
 
+// Til P/L
 async function fetchAllEntries(year) {
   const entries  = await fetchEntriesForYear(year);
   const drafts   = await fetchAllDraftEntries(year);
   const cashbook = await fetchAllCashbookEntries(year);
   return entries.concat(drafts).concat(cashbook);
+}
+
+// Til likviditet
+async function fetchBankEntries(year) {
+  const entries = await fetchEntriesForYear(year);
+  const drafts  = await fetchBankDraftEntries(year);
+  return entries.concat(drafts);
 }
 
 async function fetchAllInvoices(year) {
@@ -209,11 +242,13 @@ app.get('/api/liquidity', async (req, res) => {
     const toStr   = toDate.toISOString().split('T')[0];
 
     const openingBalance = OPENING_BALANCES[year] || 0;
-    const all = await fetchAllEntries(year);
+    const all = await fetchBankEntries(year);
 
     const bankEntries = all.filter(e => {
+      const acc = e.account?.accountNumber || e.accountNumber || 0;
+      const contra = e.contraAccountNumber || 0;
       const dateStr = (e.date || '').split('T')[0];
-      return isBankEntry(e) && dateStr <= toStr;
+      return (acc === BANK_ACCOUNT || contra === BANK_ACCOUNT) && dateStr <= toStr;
     }).sort((a, b) => {
       const dateDiff = new Date(a.date) - new Date(b.date);
       if (dateDiff !== 0) return dateDiff;
@@ -306,10 +341,12 @@ app.get('/api/orders', async (req, res) => {
 app.get('/api/debug/bank', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const all = await fetchAllEntries(year);
-    const bankEntries = all
-      .filter(e => isBankEntry(e))
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    const all = await fetchBankEntries(year);
+    const bankEntries = all.filter(e => {
+      const acc = e.account?.accountNumber || e.accountNumber || 0;
+      const contra = e.contraAccountNumber || 0;
+      return acc === BANK_ACCOUNT || contra === BANK_ACCOUNT;
+    }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const openingBalance = OPENING_BALANCES[year] || 0;
     const deltaMap = {};
@@ -331,9 +368,8 @@ app.get('/api/debug/bank', async (req, res) => {
 app.get('/api/debug/drafts', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const drafts = await fetchAllDraftEntries(year);
-    const bank = drafts.filter(e => isBankEntry(e));
-    res.json({ count: bank.length, entries: bank });
+    const drafts = await fetchBankDraftEntries(year);
+    res.json({ count: drafts.length, entries: drafts });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -347,9 +383,11 @@ app.get('/api/debug/cashbooks', async (req, res) => {
     for (const cb of cashbooks) {
       const entriesRes = await fetch(`${BASE}/cashbooks/${cb.cashBookNumber}/entries?pagesize=1000`, { headers: HEADERS });
       const entriesData = await entriesRes.json();
-      const bank = (entriesData.collection || []).filter(e =>
-        isBankEntry(e) && new Date(e.date).getFullYear() === year
-      );
+      const bank = (entriesData.collection || []).filter(e => {
+        const acc = e.account?.accountNumber || e.accountNumber || 0;
+        const contra = e.contraAccountNumber || 0;
+        return (acc === BANK_ACCOUNT || contra === BANK_ACCOUNT) && new Date(e.date).getFullYear() === year;
+      });
       result.push({ cashbook: cb, bankEntries: bank });
     }
     res.json(result);
@@ -374,7 +412,7 @@ app.get('/api/debug/journal1', async (req, res) => {
 
 app.get('/api/debug/contrafilter', async (req, res) => {
   try {
-    const r = await fetch(`${BASE_NEW}/draft-entries?contraAccountNumber=5830`, { headers: HEADERS });
+    const r = await fetch(`${BASE_NEW}/draft-entries?contraAccountNumber=${BANK_ACCOUNT}`, { headers: HEADERS });
     const d = await r.json();
     res.json(d);
   } catch (e) { res.status(500).json({ error: e.message }); }

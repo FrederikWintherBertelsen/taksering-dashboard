@@ -214,7 +214,7 @@ body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace;
         <div class="card-header">
           <div>
             <div class="card-title" style="margin:0">Likviditet — Banksaldo</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:3px">Konto 6750 · Sidste 90 dage · Daglig saldo</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px" id="liq-subtitle">Konto 6750 · 90 dage · Daglig saldo</div>
           </div>
           <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--green)" id="liq-current">—</div>
         </div>
@@ -337,6 +337,7 @@ function setYear(y) {
   document.getElementById('yr-' + y).classList.add('active');
   loadOversigt();
 }
+
 function setMonth(m) {
   selectedMonth = m;
   document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
@@ -345,7 +346,9 @@ function setMonth(m) {
   renderPL();
   renderRevenueChart();
   renderCustomerChart();
+  loadLiquidity();
 }
+
 document.getElementById('mo-' + selectedMonth).classList.add('active');
 
 function filterTable(tblId, query) {
@@ -374,9 +377,16 @@ async function loadOversigt() {
 
 async function loadLiquidity() {
   try {
-    const res = await fetch('/api/liquidity');
+    const res = await fetch(`/api/liquidity?year=${selectedYear}&month=${selectedMonth}`);
     const data = await res.json();
     renderLiquidityChart(data.days || []);
+    const lastDay = data.days?.[data.days.length - 1]?.date || '';
+    const firstDay = data.days?.[0]?.date || '';
+    if (firstDay && lastDay) {
+      const f = new Date(firstDay).toLocaleDateString('da-DK', {day:'numeric', month:'short'});
+      const t = new Date(lastDay).toLocaleDateString('da-DK', {day:'numeric', month:'short', year:'numeric'});
+      document.getElementById('liq-subtitle').textContent = `Konto 6750 · ${f} – ${t} · Daglig saldo`;
+    }
   } catch(e) { console.error(e); }
 }
 

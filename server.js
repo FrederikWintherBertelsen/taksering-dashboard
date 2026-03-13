@@ -1,3 +1,4 @@
+// v3
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -38,7 +39,6 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
-// Beløb i DKK ekskl. moms for kladde-entries
 function draftAmountDKKExVat(e) {
   const raw = Math.abs(e.amount || 0);
   const rate = (e.exchangeRate || 100) / 100;
@@ -76,8 +76,8 @@ app.get('/api/test-pl', async (req, res) => {
       dUrl = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
     }
 
+    // Admin breakdown
     const adminAccounts = {};
-
     booked.forEach(e => {
       const acc = e.account?.accountNumber || 0;
       if (acc >= 3600 && acc <= 3790) {
@@ -85,7 +85,6 @@ app.get('/api/test-pl', async (req, res) => {
         adminAccounts[acc].booked += e.amount || 0;
       }
     });
-
     drafts.forEach(e => {
       const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
       if (acc >= 3600 && acc <= 3790) {
@@ -93,11 +92,35 @@ app.get('/api/test-pl', async (req, res) => {
         adminAccounts[acc].drafts += draftAmountDKKExVat(e);
       }
     });
-
     Object.keys(adminAccounts).forEach(k => {
       adminAccounts[k].booked = Math.round(adminAccounts[k].booked);
       adminAccounts[k].drafts = Math.round(adminAccounts[k].drafts);
       adminAccounts[k].combined = adminAccounts[k].booked + adminAccounts[k].drafts;
+    });
+
+    // Løn breakdown
+    const salaryAccounts = {};
+    booked.forEach(e => {
+      const acc = e.account?.accountNumber || 0;
+      if (acc >= 2210 && acc <= 2285) {
+        if (!salaryAccounts[acc]) salaryAccounts[acc] = { booked: 0, drafts: 0, bookedEntries: [] };
+        salaryAccounts[acc].booked += e.amount || 0;
+      }
+    });
+    drafts.forEach(e => {
+      const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
+      if (acc >= 2210 && acc <= 2285) {
+        if (!salaryAccounts[acc]) salaryAccounts[acc] = { booked: 0, drafts: 0 };
+        salaryAccounts[acc].drafts += draftAmountDKKExVat(e);
+        // Gem rå entry for debugging
+        if (!salaryAccounts[acc].draftEntries) salaryAccounts[acc].draftEntries = [];
+        salaryAccounts[acc].draftEntries.push({ entryNumber: e.entryNumber, amount: e.amount, exchangeRate: e.exchangeRate, vatCode: e.vatCode, contraVatCode: e.contraVatCode, text: e.text, entryTypeNumber: e.entryTypeNumber });
+      }
+    });
+    Object.keys(salaryAccounts).forEach(k => {
+      salaryAccounts[k].booked = Math.round(salaryAccounts[k].booked);
+      salaryAccounts[k].drafts = Math.round(salaryAccounts[k].drafts);
+      salaryAccounts[k].combined = salaryAccounts[k].booked + salaryAccounts[k].drafts;
     });
 
     const cats = Object.entries(PL_MAP).map(([name, range]) => {
@@ -110,7 +133,7 @@ app.get('/api/test-pl', async (req, res) => {
       return { name, range: `${range.from}-${range.to}`, booked: Math.round(b), drafts: Math.round(d), combined: Math.round(b + d) };
     });
 
-    res.json({ month: 'Februar 2026', bookedCount: booked.length, draftsCount: drafts.length, categories: cats, adminByAccount: adminAccounts });
+    res.json({ month: 'Februar 2026', bookedCount: booked.length, draftsCount: drafts.length, categories: cats, adminByAccount: adminAccounts, salaryByAccount: salaryAccounts });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

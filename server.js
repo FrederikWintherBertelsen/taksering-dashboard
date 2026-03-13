@@ -1,4 +1,4 @@
-// v4
+// v5
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -42,17 +42,61 @@ app.post('/api/login', (req, res) => {
 function draftAmountDKKExVat(e) {
   const rate = (e.exchangeRate || 100) / 100;
   if (e.entryTypeNumber === 3) {
-    // Leverandørpostering: beløb er negativt, tag absolut og omregn
     const dkk = Math.abs(e.amount || 0) * rate;
     const hasVat = e.contraVatCode || e.vatCode;
     return hasVat ? dkk / 1.25 : dkk;
   } else {
-    // Finanspostering: bevar fortegn
     const dkk = (e.amount || 0) * rate;
     const hasVat = e.contraVatCode || e.vatCode;
     return hasVat ? dkk / 1.25 : dkk;
   }
 }
+
+// Debug: vis alle rå kladde-entries for salg+admin i feb 2026
+app.get('/api/test-drafts-raw', async (req, res) => {
+  try {
+    const year = 2026, month = 2;
+    let drafts = [];
+    let dUrl = `${BASE_NEW}/draft-entries`;
+    while (dUrl) {
+      const r = await fetch(dUrl, { headers: HEADERS });
+      const d = await r.json();
+      const items = (d.items || []).filter(e => {
+        if (!e.date) return false;
+        const date = new Date(e.date);
+        return date.getFullYear() === year && date.getMonth() + 1 === month;
+      });
+      drafts = drafts.concat(items);
+      dUrl = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
+    }
+
+    const relevant = drafts
+      .map(e => {
+        const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
+        const inSales = acc >= 2740 && acc <= 2811;
+        const inAdmin = acc >= 3600 && acc <= 3790;
+        if (!inSales && !inAdmin) return null;
+        return {
+          cat: inSales ? 'salg' : 'admin',
+          acc,
+          entryTypeNumber: e.entryTypeNumber,
+          accountNumber: e.accountNumber,
+          contraAccountNumber: e.contraAccountNumber,
+          amount: e.amount,
+          exchangeRate: e.exchangeRate,
+          vatCode: e.vatCode,
+          contraVatCode: e.contraVatCode,
+          computed: Math.round(draftAmountDKKExVat(e))
+        };
+      })
+      .filter(Boolean);
+
+    const salesTotal = relevant.filter(e => e.cat === 'salg').reduce((s, e) => s + e.computed, 0);
+    const adminTotal = relevant.filter(e => e.cat === 'admin').reduce((s, e) => s + e.computed, 0);
+
+    res.json({ salesTotal, adminTotal, entries: relevant });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.get('/api/test-pl', async (req, res) => {
   try {
@@ -83,7 +127,6 @@ app.get('/api/test-pl', async (req, res) => {
       dUrl = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
     }
 
-    // Admin breakdown
     const adminAccounts = {};
     booked.forEach(e => {
       const acc = e.account?.accountNumber || 0;
@@ -105,7 +148,6 @@ app.get('/api/test-pl', async (req, res) => {
       adminAccounts[k].combined = adminAccounts[k].booked + adminAccounts[k].drafts;
     });
 
-    // Løn breakdown
     const salaryAccounts = {};
     booked.forEach(e => {
       const acc = e.account?.accountNumber || 0;

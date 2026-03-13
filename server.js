@@ -1,4 +1,4 @@
-// v23
+// v24
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -367,6 +367,14 @@ app.get('/api/debug/journals', async (req, res) => {
 app.get('/api/debug/journal1', async (req, res) => {
   try {
     const r = await fetch(`${BASE_NEW}/draft-entries?journalNumber=1`, { headers: HEADERS });
+    const d = await r.json();
+    res.json(d);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/debug/contrafilter', async (req, res) => {
+  try {
+    const r = await fetch(`${BASE_NEW}/draft-entries?contraAccountNumber=5830`, { headers: HEADERS });
     const d = await r.json();
     res.json(d);
   } catch (e) { res.status(500).json({ error: e.message }); }

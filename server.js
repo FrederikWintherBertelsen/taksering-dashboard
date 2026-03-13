@@ -39,16 +39,12 @@ app.post('/api/login', (req, res) => {
   else res.status(401).json({ error: 'Forkert adgangskode' });
 });
 
-function draftAmountDKKExVat(e) {
+function draftAmountDKK(e) {
   const rate = (e.exchangeRate || 100) / 100;
   if (e.entryTypeNumber === 3) {
-    const dkk = Math.abs(e.amount || 0) * rate;
-    const hasVat = e.contraVatCode || e.vatCode;
-    return hasVat ? dkk / 1.25 : dkk;
+    return Math.abs(e.amount || 0) * rate;
   } else {
-    const dkk = (e.amount || 0) * rate;
-    const hasVat = e.contraVatCode || e.vatCode;
-    return hasVat ? dkk / 1.25 : dkk;
+    return (e.amount || 0) * rate;
   }
 }
 
@@ -86,7 +82,7 @@ app.get('/api/test-drafts-raw', async (req, res) => {
           exchangeRate: e.exchangeRate,
           vatCode: e.vatCode,
           contraVatCode: e.contraVatCode,
-          computed: Math.round(draftAmountDKKExVat(e))
+          computed: Math.round(draftAmountDKK(e))
         };
       })
       .filter(Boolean);
@@ -139,7 +135,7 @@ app.get('/api/test-pl', async (req, res) => {
       const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
       if (acc >= 3600 && acc <= 3790) {
         if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 };
-        adminAccounts[acc].drafts += draftAmountDKKExVat(e);
+        adminAccounts[acc].drafts += draftAmountDKK(e);
       }
     });
     Object.keys(adminAccounts).forEach(k => {
@@ -160,7 +156,7 @@ app.get('/api/test-pl', async (req, res) => {
       const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
       if (acc >= 2210 && acc <= 2285) {
         if (!salaryAccounts[acc]) salaryAccounts[acc] = { booked: 0, drafts: 0 };
-        salaryAccounts[acc].drafts += draftAmountDKKExVat(e);
+        salaryAccounts[acc].drafts += draftAmountDKK(e);
       }
     });
     Object.keys(salaryAccounts).forEach(k => {
@@ -174,7 +170,7 @@ app.get('/api/test-pl', async (req, res) => {
       const d = drafts.reduce((s, e) => {
         const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
         if (!inRange(acc, range)) return s;
-        return s + draftAmountDKKExVat(e);
+        return s + draftAmountDKK(e);
       }, 0);
       return { name, range: `${range.from}-${range.to}`, booked: Math.round(b), drafts: Math.round(d), combined: Math.round(b + d) };
     });
@@ -238,7 +234,7 @@ function sumCat(entries, range, month) {
     })
     .reduce((s, e) => {
       if (e.account) return s + (e.amount || 0);
-      return s + draftAmountDKKExVat(e);
+      return s + draftAmountDKK(e);
     }, 0);
 }
 

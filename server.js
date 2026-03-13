@@ -1,4 +1,4 @@
-// v7
+// v6
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -42,17 +42,14 @@ app.post('/api/login', (req, res) => {
 function draftAmountDKK(e) {
   const rate = (e.exchangeRate || 100) / 100;
   if (e.entryTypeNumber === 3) {
-    // Leverandørpostering: abs beløb, divider med moms hvis relevant
     const dkk = Math.abs(e.amount || 0) * rate;
     const hasVat = e.contraVatCode || e.vatCode;
     return hasVat ? dkk / 1.25 : dkk;
   } else {
-    // Finanspostering (type 5): bevar fortegn, ingen moms-division
     return (e.amount || 0) * rate;
   }
 }
 
-// Debug: vis alle rå kladde-entries for salg+admin i feb 2026
 app.get('/api/test-drafts-raw', async (req, res) => {
   try {
     const year = 2026, month = 2;
@@ -69,40 +66,20 @@ app.get('/api/test-drafts-raw', async (req, res) => {
       drafts = drafts.concat(items);
       dUrl = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
     }
-
-    const relevant = drafts
-      .map(e => {
-        const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
-        const inSales = acc >= 2740 && acc <= 2811;
-        const inAdmin = acc >= 3600 && acc <= 3790;
-        if (!inSales && !inAdmin) return null;
-        return {
-          cat: inSales ? 'salg' : 'admin',
-          acc,
-          entryTypeNumber: e.entryTypeNumber,
-          accountNumber: e.accountNumber,
-          contraAccountNumber: e.contraAccountNumber,
-          amount: e.amount,
-          exchangeRate: e.exchangeRate,
-          vatCode: e.vatCode,
-          contraVatCode: e.contraVatCode,
-          computed: Math.round(draftAmountDKK(e))
-        };
-      })
-      .filter(Boolean);
-
-    const salesTotal = relevant.filter(e => e.cat === 'salg').reduce((s, e) => s + e.computed, 0);
-    const adminTotal = relevant.filter(e => e.cat === 'admin').reduce((s, e) => s + e.computed, 0);
-
-    res.json({ salesTotal, adminTotal, entries: relevant });
+    const relevant = drafts.map(e => {
+      const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
+      const inSales = acc >= 2740 && acc <= 2811;
+      const inAdmin = acc >= 3600 && acc <= 3790;
+      if (!inSales && !inAdmin) return null;
+      return { cat: inSales ? 'salg' : 'admin', acc, entryTypeNumber: e.entryTypeNumber, accountNumber: e.accountNumber, contraAccountNumber: e.contraAccountNumber, amount: e.amount, exchangeRate: e.exchangeRate, vatCode: e.vatCode, contraVatCode: e.contraVatCode, computed: Math.round(draftAmountDKK(e)) };
+    }).filter(Boolean);
+    res.json({ salesTotal: relevant.filter(e=>e.cat==='salg').reduce((s,e)=>s+e.computed,0), adminTotal: relevant.filter(e=>e.cat==='admin').reduce((s,e)=>s+e.computed,0), entries: relevant });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/test-pl', async (req, res) => {
   try {
-    const year = 2026;
-    const month = 2;
-
+    const year = 2026, month = 2;
     let booked = [];
     let url = `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=0`;
     while (url) {
@@ -112,73 +89,28 @@ app.get('/api/test-pl', async (req, res) => {
       url = d.pagination?.nextPage || null;
     }
     booked = booked.filter(e => new Date(e.date).getMonth() + 1 === month);
-
     let drafts = [];
     let dUrl = `${BASE_NEW}/draft-entries`;
     while (dUrl) {
       const r = await fetch(dUrl, { headers: HEADERS });
       const d = await r.json();
-      const items = (d.items || []).filter(e => {
-        if (!e.date) return false;
-        const date = new Date(e.date);
-        return date.getFullYear() === year && date.getMonth() + 1 === month;
-      });
+      const items = (d.items || []).filter(e => { if (!e.date) return false; const date = new Date(e.date); return date.getFullYear() === year && date.getMonth() + 1 === month; });
       drafts = drafts.concat(items);
       dUrl = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
     }
-
     const adminAccounts = {};
-    booked.forEach(e => {
-      const acc = e.account?.accountNumber || 0;
-      if (acc >= 3600 && acc <= 3790) {
-        if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 };
-        adminAccounts[acc].booked += e.amount || 0;
-      }
-    });
-    drafts.forEach(e => {
-      const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
-      if (acc >= 3600 && acc <= 3790) {
-        if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 };
-        adminAccounts[acc].drafts += draftAmountDKK(e);
-      }
-    });
-    Object.keys(adminAccounts).forEach(k => {
-      adminAccounts[k].booked = Math.round(adminAccounts[k].booked);
-      adminAccounts[k].drafts = Math.round(adminAccounts[k].drafts);
-      adminAccounts[k].combined = adminAccounts[k].booked + adminAccounts[k].drafts;
-    });
-
+    booked.forEach(e => { const acc = e.account?.accountNumber || 0; if (acc >= 3600 && acc <= 3790) { if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 }; adminAccounts[acc].booked += e.amount || 0; } });
+    drafts.forEach(e => { const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0); if (acc >= 3600 && acc <= 3790) { if (!adminAccounts[acc]) adminAccounts[acc] = { booked: 0, drafts: 0 }; adminAccounts[acc].drafts += draftAmountDKK(e); } });
+    Object.keys(adminAccounts).forEach(k => { adminAccounts[k].booked = Math.round(adminAccounts[k].booked); adminAccounts[k].drafts = Math.round(adminAccounts[k].drafts); adminAccounts[k].combined = adminAccounts[k].booked + adminAccounts[k].drafts; });
     const salaryAccounts = {};
-    booked.forEach(e => {
-      const acc = e.account?.accountNumber || 0;
-      if (acc >= 2210 && acc <= 2285) {
-        if (!salaryAccounts[acc]) salaryAccounts[acc] = { booked: 0, drafts: 0 };
-        salaryAccounts[acc].booked += e.amount || 0;
-      }
-    });
-    drafts.forEach(e => {
-      const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
-      if (acc >= 2210 && acc <= 2285) {
-        if (!salaryAccounts[acc]) salaryAccounts[acc] = { booked: 0, drafts: 0 };
-        salaryAccounts[acc].drafts += draftAmountDKK(e);
-      }
-    });
-    Object.keys(salaryAccounts).forEach(k => {
-      salaryAccounts[k].booked = Math.round(salaryAccounts[k].booked);
-      salaryAccounts[k].drafts = Math.round(salaryAccounts[k].drafts);
-      salaryAccounts[k].combined = salaryAccounts[k].booked + salaryAccounts[k].drafts;
-    });
-
+    booked.forEach(e => { const acc = e.account?.accountNumber || 0; if (acc >= 2210 && acc <= 2285) { if (!salaryAccounts[acc]) salaryAccounts[acc] = { booked: 0, drafts: 0 }; salaryAccounts[acc].booked += e.amount || 0; } });
+    drafts.forEach(e => { const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0); if (acc >= 2210 && acc <= 2285) { if (!salaryAccounts[acc]) salaryAccounts[acc] = { booked: 0, drafts: 0 }; salaryAccounts[acc].drafts += draftAmountDKK(e); } });
+    Object.keys(salaryAccounts).forEach(k => { salaryAccounts[k].booked = Math.round(salaryAccounts[k].booked); salaryAccounts[k].drafts = Math.round(salaryAccounts[k].drafts); salaryAccounts[k].combined = salaryAccounts[k].booked + salaryAccounts[k].drafts; });
     const cats = Object.entries(PL_MAP).map(([name, range]) => {
       const b = booked.filter(e => inRange(e.account?.accountNumber || 0, range)).reduce((s, e) => s + (e.amount || 0), 0);
-      const d = drafts.reduce((s, e) => {
-        const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0);
-        if (!inRange(acc, range)) return s;
-        return s + draftAmountDKK(e);
-      }, 0);
+      const d = drafts.reduce((s, e) => { const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.accountNumber || 0); if (!inRange(acc, range)) return s; return s + draftAmountDKK(e); }, 0);
       return { name, range: `${range.from}-${range.to}`, booked: Math.round(b), drafts: Math.round(d), combined: Math.round(b + d) };
     });
-
     res.json({ month: 'Februar 2026', bookedCount: booked.length, draftsCount: drafts.length, categories: cats, adminByAccount: adminAccounts, salaryByAccount: salaryAccounts });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -189,10 +121,7 @@ async function fetchAllDraftEntries(year) {
   while (url) {
     const r = await fetch(url, { headers: HEADERS });
     const d = await r.json();
-    const items = (d.items || []).filter(e => {
-      if (!e.date) return false;
-      return new Date(e.date).getFullYear() === year;
-    });
+    const items = (d.items || []).filter(e => { if (!e.date) return false; return new Date(e.date).getFullYear() === year; });
     drafts = drafts.concat(items);
     url = d.cursor ? `${BASE_NEW}/draft-entries?cursor=${d.cursor}` : null;
   }
@@ -231,9 +160,7 @@ function sumCat(entries, range, month) {
   return entries
     .filter(e => {
       const date = new Date(e.date);
-      const acc = e.entryTypeNumber === 3
-        ? (e.contraAccountNumber || 0)
-        : (e.account?.accountNumber || e.accountNumber || 0);
+      const acc = e.entryTypeNumber === 3 ? (e.contraAccountNumber || 0) : (e.account?.accountNumber || e.accountNumber || 0);
       return date.getMonth() + 1 === month && inRange(acc, range);
     })
     .reduce((s, e) => {
@@ -245,11 +172,7 @@ function sumCat(entries, range, month) {
 app.get('/api/revenue', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const [entries, invoices] = await Promise.all([
-      fetchAllEntries(year),
-      fetchAllInvoices(year)
-    ]);
-
+    const [entries, invoices] = await Promise.all([fetchAllEntries(year), fetchAllInvoices(year)]);
     const seen = new Set();
     const months = Array.from({length: 12}, (_, i) => {
       const m = i + 1;
@@ -266,7 +189,6 @@ app.get('/api/revenue', async (req, res) => {
       cids.forEach(c => seen.add(c));
       return { month: m, revenue, cogs, salaries, salesCosts, rent, adminCosts, financial, customers: cids.length, newCustomers };
     });
-
     res.json({ year, months });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -277,41 +199,25 @@ app.get('/api/liquidity', async (req, res) => {
     const toStr = today.toISOString().split('T')[0];
     const from  = new Date(today); from.setDate(today.getDate() - 180);
     const fromStr = from.toISOString().split('T')[0];
-
     const years = [...new Set([from.getFullYear(), today.getFullYear()])];
     let all = [];
     for (const y of years) all = all.concat(await fetchAllEntries(y));
-
-    const bankEntries = all
-      .filter(e => {
-        const acc = e.account?.accountNumber || 0;
-        const dateStr = (e.date || '').split('T')[0];
-        return acc === BANK_ACCOUNT && dateStr >= fromStr && dateStr <= toStr;
-      })
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-
+    const bankEntries = all.filter(e => { const acc = e.account?.accountNumber || 0; const dateStr = (e.date || '').split('T')[0]; return acc === BANK_ACCOUNT && dateStr >= fromStr && dateStr <= toStr; }).sort((a, b) => new Date(a.date) - new Date(b.date));
     const dailyMap = {};
-    bankEntries.forEach(e => {
-      const day = e.date.split('T')[0];
-      dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0);
-    });
-
+    bankEntries.forEach(e => { const day = e.date.split('T')[0]; dailyMap[day] = (dailyMap[day] || 0) + (e.amount || 0); });
     const allDates = Object.keys(dailyMap).sort();
     let running = 0;
     const cumulMap = {};
     allDates.forEach(d => { running += dailyMap[d]; cumulMap[d] = running; });
-
     const cutoff = new Date(today); cutoff.setDate(today.getDate() - 90);
     let lastKnown = 0;
     allDates.forEach(d => { if (new Date(d) <= cutoff) lastKnown = cumulMap[d]; });
-
     const days = [];
     for (let d = new Date(cutoff); d <= today; d.setDate(d.getDate() + 1)) {
       const ds = d.toISOString().split('T')[0];
       if (cumulMap[ds] !== undefined) lastKnown = cumulMap[ds];
       days.push({ date: ds, balance: lastKnown });
     }
-
     res.json({ days });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

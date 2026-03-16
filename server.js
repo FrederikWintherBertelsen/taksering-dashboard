@@ -1,4 +1,4 @@
-// v27
+// v28
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -178,8 +178,10 @@ async function fetchBankDraftEntries(year) {
   return drafts;
 }
 
+// FIX v28: Deduplikér på tværs af cashbooks — samme entry returneres fra alle cashbooks
 async function fetchAllCashbookEntries(year) {
   let all = [];
+  const seen = new Set();
   try {
     const cbRes = await fetch(`${BASE}/cashbooks`, { headers: HEADERS });
     const cbData = await cbRes.json();
@@ -192,7 +194,13 @@ async function fetchAllCashbookEntries(year) {
       const entriesData = await entriesRes.json();
       const items = (entriesData.collection || []).filter(e => {
         if (!e.date) return false;
-        return new Date(e.date).getFullYear() === year;
+        if (new Date(e.date).getFullYear() !== year) return false;
+        const key = e.entryNumber != null
+          ? `cb-${e.entryNumber}`
+          : `cb-${e.date}-${e.account?.accountNumber || e.accountNumber || 0}-${e.amount}-${e.text || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
       all = all.concat(items);
     }

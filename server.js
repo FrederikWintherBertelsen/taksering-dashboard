@@ -1,4 +1,4 @@
-// v26
+// v27
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -114,8 +114,10 @@ async function fetchAllJournals() {
 }
 
 // Til P/L — henter alle draft-entries via journal-loop
+// FIX v27: Deduplikér på entryNumber — samme entry kan returneres fra flere journal-kald
 async function fetchAllDraftEntries(year) {
   let drafts = [];
+  const seen = new Set();
   const journals = await fetchAllJournals();
   for (const journal of journals) {
     let url = `${BASE_NEW}/draft-entries?journalNumber=${journal.number}`;
@@ -124,7 +126,14 @@ async function fetchAllDraftEntries(year) {
       const d = await r.json();
       const items = (d.items || []).filter(e => {
         if (!e.date) return false;
-        return new Date(e.date).getFullYear() === year;
+        if (new Date(e.date).getFullYear() !== year) return false;
+        // Deduplikér: brug entryNumber som unik nøgle
+        const key = e.entryNumber != null
+          ? `${e.journalNumber || journal.number}-${e.entryNumber}`
+          : `${e.date}-${e.accountNumber}-${e.amount}-${e.text}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
       drafts = drafts.concat(items);
       url = d.cursor

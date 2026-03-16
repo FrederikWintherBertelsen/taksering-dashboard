@@ -1,4 +1,4 @@
-// v28
+// v29
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -68,7 +68,9 @@ function resolveAccountNumber(e) {
 }
 
 // Beregn beløb i DKK for en entry til P/L
-// FIX v26: Bogførte entries bruges direkte. Drafts konverteres via kurs og moms.
+// FIX v29: Type3 drafts er kreditposteringer på udgiftskontoen (via contraAccountNumber)
+// → de har negativt amount men repræsenterer udgifter → brug abs()
+// Type5 og øvrige drafts er normale → brug amount direkte
 function plAmount(e) {
   if (e.account) {
     // Bogført entry — amount er allerede i DKK ekskl. moms
@@ -76,6 +78,14 @@ function plAmount(e) {
   }
   // Draft entry
   const rate = (e.exchangeRate || 100) / 100;
+  if (e.entryTypeNumber === 3) {
+    // Ompostering: contraAccountNumber er udgiftskontoen, amount er negativ kredit
+    // Vi vil have den positive udgiftsværdi (samme fortegn som bogførte udgifter)
+    const dkk = Math.abs(e.amount || 0) * rate;
+    const hasVat = e.contraVatCode || e.vatCode;
+    return hasVat ? dkk / 1.25 : dkk;
+  }
+  // Type5 og andre: normal retning
   const dkk = (e.amount || 0) * rate;
   const hasVat = e.contraVatCode || e.vatCode;
   return hasVat ? dkk / 1.25 : dkk;

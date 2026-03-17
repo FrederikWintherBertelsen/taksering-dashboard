@@ -1,4 +1,4 @@
-// v30
+// v31
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -46,9 +46,6 @@ app.post('/api/login', (req, res) => {
 
 // ─── HJÆLPEFUNKTIONER ────────────────────────────────────────────────────────
 
-// FIX v30: Type 2 (kundeindbetaling) med contraAccountNumber=5830 = penge IND på bank
-// Type 2: bank debiteres (stiger) → returner +(amount)
-// Type 4/5 og andre med contra=5830: bank krediteres (falder) → returner -(amount)
 function bankAmount(e) {
   const acc    = e.account?.accountNumber || e.accountNumber || 0;
   const contra = e.contraAccountNumber || 0;
@@ -57,9 +54,6 @@ function bankAmount(e) {
   return -(e.amount || 0);
 }
 
-// Returnerer kontonummer for en entry (bogført eller kladde)
-// FIX v26: Bogførte entries bruger e.account.accountNumber, drafts bruger e.accountNumber
-// Ved ompostering (entryTypeNumber===3) er det contraAccountNumber der er "udgiftskontoen"
 function resolveAccountNumber(e) {
   if (e.account) {
     return e.account.accountNumber || 0;
@@ -70,10 +64,6 @@ function resolveAccountNumber(e) {
   return e.accountNumber || 0;
 }
 
-// Beregn beløb i DKK for en entry til P/L
-// FIX v29: Type3 drafts er kreditposteringer på udgiftskontoen (via contraAccountNumber)
-// → de har negativt amount men repræsenterer udgifter → brug abs()
-// Type5 og øvrige drafts er normale → brug amount direkte
 function plAmount(e) {
   if (e.account) {
     return e.amount || 0;
@@ -119,8 +109,6 @@ async function fetchAllJournals() {
   return journals;
 }
 
-// Til P/L — henter alle draft-entries via journal-loop
-// FIX v27: Deduplikér på entryNumber — samme entry kan returneres fra flere journal-kald
 async function fetchAllDraftEntries(year) {
   let drafts = [];
   const seen = new Set();
@@ -149,7 +137,6 @@ async function fetchAllDraftEntries(year) {
   return drafts;
 }
 
-// Til likviditet — henter kun bank-relevante draft-entries direkte
 async function fetchBankDraftEntries(year) {
   let drafts = [];
 
@@ -183,7 +170,6 @@ async function fetchBankDraftEntries(year) {
   return drafts;
 }
 
-// FIX v28: Deduplikér på tværs af cashbooks — samme entry returneres fra alle cashbooks
 async function fetchAllCashbookEntries(year) {
   let all = [];
   const seen = new Set();
@@ -230,7 +216,6 @@ async function fetchEntriesForYear(year) {
   return all;
 }
 
-// Til P/L
 async function fetchAllEntries(year) {
   const entries  = await fetchEntriesForYear(year);
   const drafts   = await fetchAllDraftEntries(year);
@@ -238,7 +223,6 @@ async function fetchAllEntries(year) {
   return entries.concat(drafts).concat(cashbook);
 }
 
-// Til likviditet
 async function fetchBankEntries(year) {
   const entries = await fetchEntriesForYear(year);
   const drafts  = await fetchBankDraftEntries(year);
@@ -443,7 +427,20 @@ app.get('/api/debug/bank', async (req, res) => {
       return { date: d, balance: Math.round(running * 100) / 100 };
     });
 
-    res.json({ year, openingBalance, totalEntries: bankEntries.length, dailyBalances });
+    const entries = bankEntries.map(e => ({
+      date: e.date.split('T')[0],
+      text: e.text || e.description || '',
+      amount: e.amount,
+      bankAmount: Math.round(bankAmount(e) * 100) / 100,
+      entryType: e.entryTypeNumber,
+      account: e.account?.accountNumber || e.accountNumber || null,
+      contra: e.contraAccountNumber || null,
+      source: e.account ? 'booked' : 'draft',
+      entryNumber: e.entryNumber || null,
+      voucherNumber: e.voucherNumber || null,
+    }));
+
+    res.json({ year, openingBalance, totalEntries: bankEntries.length, dailyBalances, entries });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -541,3 +538,10 @@ app.get('/api/debug/pl', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server kører på port ${PORT}`));
+```
+
+---
+
+Deploy dette. Når det er oppe, send:
+```
+https://taksering-dashboard.vercel.app/api/debug/bank?year=2026&v=31

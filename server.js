@@ -1,4 +1,4 @@
-// v39
+// v41
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -236,7 +236,6 @@ async function fetchAllEntries(year) {
   return entries.concat(drafts).concat(cashbook);
 }
 
-// Til likviditet: alle bogforte entries + deduplikerede bank-drafts
 async function fetchBankEntries(year) {
   const entries = await fetchEntriesForYear(year);
   const drafts  = await fetchBankDraftEntries(year);
@@ -415,6 +414,238 @@ app.get('/api/orders', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── DEBITOR / KREDITOR ───────────────────────────────────────────────────────
+
+app.get('/api/debtors', async (req, res) => {
+  try {
+    let all = [];
+    let url = `${BASE}/invoices/booked?filter=remainder$gt:0&pagesize=1000&skippages=0&sort=dueDate$asc`;
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      all = all.concat(d.collection || []);
+      url = d.pagination?.nextPage || null;
+    }
+    const mapped = all.map(inv => ({
+      invoiceNumber: inv.bookedInvoiceNumber,
+      date: inv.date,
+      dueDate: inv.dueDate,
+      customer: inv.customer?.name || '',
+      customerNumber: inv.customer?.customerNumber || null,
+      grossAmount: inv.grossAmount || 0,
+      remainder: inv.remainder || 0,
+      currency: inv.currency?.code || 'DKK',
+    }));
+    res.json({ count: mapped.length, invoices: mapped });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/creditors', async (req, res) => {
+  try {
+    let all = [];
+    let url = `${BASE}/supplier-invoices/booked?filter=remainder$gt:0&pagesize=1000&skippages=0&sort=dueDate$asc`;
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      if (!r.ok) { res.json({ count: 0, invoices: [], note: 'endpoint not available' }); return; }
+      const d = await r.json();
+      all = all.concat(d.collection || []);
+      url = d.pagination?.nextPage || null;
+    }
+    const mapped = all.map(inv => ({
+      invoiceNumber: inv.supplierInvoiceNumber || inv.bookedSupplierInvoiceNumber,
+      date: inv.date,
+      dueDate: inv.dueDate,
+      supplier: inv.supplier?.name || '',
+      supplierNumber: inv.supplier?.supplierNumber || null,
+      grossAmount: inv.grossAmount || inv.amount || 0,
+      remainder: inv.remainder || 0,
+      currency: inv.currency?.code || 'DKK',
+    }));
+    res.json({ count: mapped.length, invoices: mapped });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/forecast', async (req, res) => {
+  try {
+    const year  = parseInt(req.query.year)  || new Date().getFullYear();
+    const days  = parseInt(req.query.days)  || 90;
+
+    const bankAll = await fetchBankEntries(year);
+    const bankEntries = bankAll.filter(e => {
+      const acc   = e.account?.accountNumber || e.accountNumber || 0;
+      const contra = e.contraAccountNumber || 0;
+      return acc === BANK_ACCOUNT || contra === BANK_ACCOUNT;
+    });
+    const deltaMap = {};
+    bankEntries.forEach(e => {
+      const day = (e.date || '').split('T')[0];
+      deltaMap[day] = (deltaMap[day] || 0) + bankAmount(e);
+    });
+    const openingBalance = OPENING_BALANCES[year] || 0;
+    let currentBalance = openingBalance;
+    const today = new Date().toISOString().split('T')[0];
+    Object.keys(deltaMap).sort().forEach(d => {
+      if (d <= today) currentBalance += deltaMap[d];
+    });
+    currentBalance = Math.round(currentBalance * 100) / 100;
+
+    let debtors = [];
+    let dUrl = `${BASE}/invoices/booked?filter=remainder$gt:0&pagesize=1000&skippages=0&sort=dueDate$asc`;
+    while (dUrl) {
+      const r = await fetch(dUrl, { headers: HEADERS });
+      const d = await r.json();
+      debtors = debtors.concat(d.collection || []);
+      dUrl = d.pagination?.nextPage || null;
+    }
+
+    let creditors = [];
+    try {
+      let cUrl = `${BASE}/supplier-invoices/booked?filter=remainder$gt:0&pagesize=1000&skippages=0`;
+      while (cUrl) {
+        const r = await fetch(cUrl, { headers: HEADERS });
+        if (!r.ok) break;
+        const d = await r.json();
+        creditors = creditors.concat(d.collection || []);
+        cUrl = d.pagination?.nextPage || null;
+      }
+    } catch (e) {}
+
+    const forecastMap = {};
+    debtors.forEach(inv => {
+      const dd = (inv.dueDate || '').split('T')[0];
+      if (!dd || dd < today) return;
+      if (!forecastMap[dd]) forecastMap[dd] = { inflows: [], outflows: [] };
+      forecastMap[dd].inflows.push({
+        type: 'debtor',
+        text: inv.customer?.name || 'Ukendt kunde',
+        amount: inv.remainder || 0,
+        invoiceNumber: inv.bookedInvoiceNumber,
+      });
+    });
+    creditors.forEach(inv => {
+      const dd = (inv.dueDate || '').split('T')[0];
+      if (!dd || dd < today) return;
+      if (!forecastMap[dd]) forecastMap[dd] = { inflows: [], outflows: [] };
+      forecastMap[dd].outflows.push({
+        type: 'creditor',
+        text: inv.supplier?.name || 'Ukendt leverandør',
+        amount: -(inv.remainder || 0),
+        invoiceNumber: inv.supplierInvoiceNumber || inv.bookedSupplierInvoiceNumber,
+      });
+    });
+
+    let running = currentBalance;
+    const result = [];
+    for (let i = 0; i <= days; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() + i);
+      const ds = d.toISOString().split('T')[0];
+      const day = forecastMap[ds] || { inflows: [], outflows: [] };
+      const inflow  = day.inflows.reduce((s, x) => s + x.amount, 0);
+      const outflow = day.outflows.reduce((s, x) => s + x.amount, 0);
+      running += inflow + outflow;
+      result.push({
+        date: ds,
+        balance: Math.round(running * 100) / 100,
+        inflow: Math.round(inflow * 100) / 100,
+        outflow: Math.round(outflow * 100) / 100,
+        events: [...day.inflows, ...day.outflows],
+      });
+    }
+
+    res.json({ currentBalance, forecastDays: days, days: result });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── DEBITOR EXPLORATION ─────────────────────────────────────────────────────
+
+app.get('/api/debug/customers-terms', async (req, res) => {
+  try {
+    let all = [];
+    let url = `${BASE}/customers?pagesize=1000&skippages=0`;
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      all = all.concat(d.collection || []);
+      url = d.pagination?.nextPage || null;
+    }
+    const mapped = all.map(c => ({
+      customerNumber: c.customerNumber,
+      name: c.name,
+      email: c.email || '',
+      balance: c.balance || 0,
+      paymentTerms: c.paymentTerms || null,
+      creditLimit: c.creditLimit || 0,
+      currency: c.currency?.code || 'DKK',
+    }));
+    mapped.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+    res.json({ count: mapped.length, customers: mapped });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/debug/open-invoices', async (req, res) => {
+  try {
+    let all = [];
+    let url = `${BASE}/invoices/booked?filter=remainder$gt:0&pagesize=1000&skippages=0&sort=dueDate$asc`;
+    while (url) {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      all = all.concat(d.collection || []);
+      url = d.pagination?.nextPage || null;
+    }
+    res.json({ count: all.length, invoices: all });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/debug/customer-entries/:customerNumber', async (req, res) => {
+  try {
+    const cn = req.params.customerNumber;
+    const invR = await fetch(
+      `${BASE}/invoices/booked?filter=customer.customerNumber$eq:${cn}&pagesize=100&sort=bookedInvoiceNumber$desc`,
+      { headers: HEADERS }
+    );
+    const invD = await invR.json();
+    const entR = await fetch(`${BASE}/customers/${cn}/totals`, { headers: HEADERS });
+    const entD = entR.ok ? await entR.json() : null;
+    res.json({
+      customerNumber: cn,
+      invoices: (invD.collection || []).map(i => ({
+        number: i.bookedInvoiceNumber,
+        date: i.date,
+        dueDate: i.dueDate,
+        grossAmount: i.grossAmount,
+        remainder: i.remainder,
+        paid: (i.remainder || 0) === 0,
+      })),
+      totals: entD,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/debug/payment-terms', async (req, res) => {
+  try {
+    const r = await fetch(`${BASE}/payment-terms?pagesize=100`, { headers: HEADERS });
+    const d = await r.json();
+    res.json(d);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/debug/supplier-invoices', async (req, res) => {
+  try {
+    const results = {};
+    const r1 = await fetch(`${BASE}/supplier-invoices/booked?pagesize=5`, { headers: HEADERS });
+    results.bookedSupplier = { status: r1.status, data: r1.ok ? await r1.json() : null };
+    const r2 = await fetch(`${BASE}/supplier-invoices/unpaid?pagesize=5`, { headers: HEADERS });
+    results.unpaidSupplier = { status: r2.status, data: r2.ok ? await r2.json() : null };
+    const r3 = await fetch(
+      `${BASE}/accounting-years/2026/entries?pagesize=5&filter=account.accountNumber$eq:6800`,
+      { headers: HEADERS }
+    );
+    results.creditorEntries = { status: r3.status, data: r3.ok ? await r3.json() : null };
+    res.json(results);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── DEBUG ENDPOINTS ──────────────────────────────────────────────────────────
 
 app.get('/api/debug/bank', async (req, res) => {
@@ -426,9 +657,6 @@ app.get('/api/debug/bank', async (req, res) => {
     const all = await fetchBankEntries(year);
     const bankEntries = all
       .filter(e => {
-        const acc    = e.account?.accountNumber || e.accountNumber || 0;
-        const contra = e.contraAccountNumber || 0;
-        if (!(acc === BANK_ACCOUNT || contra === BANK_ACCOUNT)) return false;
         const ds = (e.date || '').split('T')[0];
         if (from && ds < from) return false;
         if (to   && ds > to)   return false;
@@ -565,3 +793,13 @@ app.get('/api/debug/pl', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server kører på port ${PORT}`));
+```
+
+---
+
+Deploy og send alle fire links om 60 sek:
+```
+https://taksering-dashboard.vercel.app/api/debug/payment-terms?v=41
+https://taksering-dashboard.vercel.app/api/debug/customers-terms?v=41
+https://taksering-dashboard.vercel.app/api/debug/supplier-invoices?v=41
+https://taksering-dashboard.vercel.app/api/debug/open-invoices?v=41

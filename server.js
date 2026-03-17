@@ -1,4 +1,4 @@
-// v36
+// v37
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -236,18 +236,23 @@ async function fetchAllEntries(year) {
   return entries.concat(drafts).concat(cashbook);
 }
 
-// v35: Hent konto 5830 entries direkte — præcis som e-conomics eget kontoudtog
+// v37: Hent konto 5830 bogforte entries via accounting-years endpoint med konto-filter
+// Bruger valueDate (bankdato) hvis den findes - matcher Excel kontoudtog præcist
 async function fetchAccount5830Entries(year) {
   let all = [];
   let page = 0;
-  const dateFrom = `${year}-01-01`;
-  const dateTo   = `${year}-12-31`;
   while (true) {
-    const url = `${BASE}/accounts/${BANK_ACCOUNT}/entries?pagesize=1000&skippages=${page}&filter=date$gte:${dateFrom}$and:date$lte:${dateTo}`;
-    const r = await fetch(url, { headers: HEADERS });
+    const r = await fetch(
+      `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=${page}&filter=account.accountNumber$eq:${BANK_ACCOUNT}`,
+      { headers: HEADERS }
+    );
     if (!r.ok) break;
     const d = await r.json();
-    all = all.concat(d.collection || []);
+    const items = (d.collection || []).map(e => ({
+      ...e,
+      date: e.valueDate || e.date,
+    }));
+    all = all.concat(items);
     if (!d.pagination?.nextPage) break;
     page++;
   }
@@ -486,16 +491,21 @@ app.get('/api/debug/bank', async (req, res) => {
 app.get('/api/debug/account5830', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const r1 = await fetch(`${BASE}/accounts/${BANK_ACCOUNT}/entries?pagesize=10`, { headers: HEADERS });
+    const r1 = await fetch(
+      `${BASE}/accounting-years/${year}/entries?pagesize=5&filter=account.accountNumber$eq:${BANK_ACCOUNT}`,
+      { headers: HEADERS }
+    );
     const d1 = await r1.json();
-    const r2 = await fetch(`${BASE}/accounts/${BANK_ACCOUNT}/entries?pagesize=10&filter=date$gte:${year}-01-01$and:date$lte:${year}-12-31`, { headers: HEADERS });
-    const d2 = await r2.json();
-    const r3 = await fetch(`${BASE}/accounts/${BANK_ACCOUNT}/entries?pagesize=10&fromDate=${year}-01-01&toDate=${year}-12-31`, { headers: HEADERS });
-    const d3 = await r3.json();
+    const sample = (d1.collection || []).slice(0, 3).map(e => ({
+      date: e.date, valueDate: e.valueDate, amount: e.amount,
+      text: e.text, account: e.account?.accountNumber,
+    }));
     res.json({
-      noFilter:   { status: r1.status, keys: Object.keys(d1), collectionLength: (d1.collection||[]).length, firstItem: (d1.collection||[])[0] || null, raw: d1 },
-      withFilter: { status: r2.status, keys: Object.keys(d2), collectionLength: (d2.collection||[]).length, firstItem: (d2.collection||[])[0] || null },
-      withFromTo: { status: r3.status, keys: Object.keys(d3), collectionLength: (d3.collection||[]).length, firstItem: (d3.collection||[])[0] || null },
+      status: r1.status,
+      totalResults: d1.pagination?.results || 0,
+      collectionLength: (d1.collection||[]).length,
+      hasValueDate: (d1.collection||[]).some(e => e.valueDate),
+      sample,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -570,7 +580,7 @@ app.get('/api/debug/pl', async (req, res) => {
 
     const entries = await fetchAllEntries(year);
     const matched = entries.filter(e => {
-      if (!e.date) return false
+      if (!e.date) return false;
       const d = new Date(e.date);
       if (d.getMonth() + 1 !== month) return false;
       const acc = resolveAccountNumber(e);

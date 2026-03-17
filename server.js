@@ -1,4 +1,4 @@
-// v35
+// v36
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -483,6 +483,23 @@ app.get('/api/debug/bank', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/debug/account5830', async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const r1 = await fetch(`${BASE}/accounts/${BANK_ACCOUNT}/entries?pagesize=10`, { headers: HEADERS });
+    const d1 = await r1.json();
+    const r2 = await fetch(`${BASE}/accounts/${BANK_ACCOUNT}/entries?pagesize=10&filter=date$gte:${year}-01-01$and:date$lte:${year}-12-31`, { headers: HEADERS });
+    const d2 = await r2.json();
+    const r3 = await fetch(`${BASE}/accounts/${BANK_ACCOUNT}/entries?pagesize=10&fromDate=${year}-01-01&toDate=${year}-12-31`, { headers: HEADERS });
+    const d3 = await r3.json();
+    res.json({
+      noFilter:   { status: r1.status, keys: Object.keys(d1), collectionLength: (d1.collection||[]).length, firstItem: (d1.collection||[])[0] || null, raw: d1 },
+      withFilter: { status: r2.status, keys: Object.keys(d2), collectionLength: (d2.collection||[]).length, firstItem: (d2.collection||[])[0] || null },
+      withFromTo: { status: r3.status, keys: Object.keys(d3), collectionLength: (d3.collection||[]).length, firstItem: (d3.collection||[])[0] || null },
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/debug/drafts', async (req, res) => {
   try {
     const year = parseInt(req.query.year) || new Date().getFullYear();
@@ -553,7 +570,7 @@ app.get('/api/debug/pl', async (req, res) => {
 
     const entries = await fetchAllEntries(year);
     const matched = entries.filter(e => {
-      if (!e.date) return false;
+      if (!e.date) return false
       const d = new Date(e.date);
       if (d.getMonth() + 1 !== month) return false;
       const acc = resolveAccountNumber(e);

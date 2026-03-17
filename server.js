@@ -1,4 +1,4 @@
-// v38
+// v39
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -236,7 +236,7 @@ async function fetchAllEntries(year) {
   return entries.concat(drafts).concat(cashbook);
 }
 
-// Til likviditet: alle bogforte entries + deduplikerede bank-drafts (v33)
+// Til likviditet: alle bogforte entries + deduplikerede bank-drafts
 async function fetchBankEntries(year) {
   const entries = await fetchEntriesForYear(year);
   const drafts  = await fetchBankDraftEntries(year);
@@ -331,10 +331,11 @@ app.get('/api/liquidity', async (req, res) => {
       dailyMap[d] = Math.round(running * 100) / 100;
     });
 
+    // Vis max 90 dage tilbage, men aldrig før 1/1-2026 (systemets startpunkt)
     const cutoff = new Date(toDate);
     cutoff.setDate(toDate.getDate() - 90);
-    const yearStart = new Date(year, 0, 1);
-    if (cutoff < yearStart) cutoff.setTime(yearStart.getTime());
+    const absoluteStart = new Date('2026-01-01');
+    if (cutoff < absoluteStart) cutoff.setTime(absoluteStart.getTime());
 
     const allDates = Object.keys(dailyMap).sort();
     let lastKnown = openingBalance;

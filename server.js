@@ -1,4 +1,4 @@
-// v31
+// v32
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -404,23 +404,35 @@ app.get('/api/orders', async (req, res) => {
 
 app.get('/api/debug/bank', async (req, res) => {
   try {
-    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const year  = parseInt(req.query.year)  || new Date().getFullYear();
+    const from  = req.query.from || null;
+    const to    = req.query.to   || null;
+
     const all = await fetchBankEntries(year);
     const bankEntries = all
       .filter(e => {
         const acc    = e.account?.accountNumber || e.accountNumber || 0;
         const contra = e.contraAccountNumber || 0;
-        return acc === BANK_ACCOUNT || contra === BANK_ACCOUNT;
+        if (!(acc === BANK_ACCOUNT || contra === BANK_ACCOUNT)) return false;
+        const ds = (e.date || '').split('T')[0];
+        if (from && ds < from) return false;
+        if (to   && ds > to)   return false;
+        return true;
       })
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const openingBalance = OPENING_BALANCES[year] || 0;
-    const deltaMap = {};
-    bankEntries.forEach(e => {
-      const day = e.date.split('T')[0];
-      deltaMap[day] = (deltaMap[day] || 0) + bankAmount(e);
+    const allForYear = all.filter(e => {
+      const acc    = e.account?.accountNumber || e.accountNumber || 0;
+      const contra = e.contraAccountNumber || 0;
+      return acc === BANK_ACCOUNT || contra === BANK_ACCOUNT;
     });
 
+    const deltaMap = {};
+    allForYear.forEach(e => {
+      const day = (e.date || '').split('T')[0];
+      deltaMap[day] = (deltaMap[day] || 0) + bankAmount(e);
+    });
     let running = openingBalance;
     const dailyBalances = Object.keys(deltaMap).sort().map(d => {
       running += deltaMap[d];
@@ -428,7 +440,7 @@ app.get('/api/debug/bank', async (req, res) => {
     });
 
     const entries = bankEntries.map(e => ({
-      date: e.date.split('T')[0],
+      date: (e.date || '').split('T')[0],
       text: e.text || e.description || '',
       amount: e.amount,
       bankAmount: Math.round(bankAmount(e) * 100) / 100,
@@ -440,7 +452,7 @@ app.get('/api/debug/bank', async (req, res) => {
       voucherNumber: e.voucherNumber || null,
     }));
 
-    res.json({ year, openingBalance, totalEntries: bankEntries.length, dailyBalances, entries });
+    res.json({ year, from, to, openingBalance, totalEntries: allForYear.length, filteredEntries: entries.length, dailyBalances, entries });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -538,10 +550,3 @@ app.get('/api/debug/pl', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server kører på port ${PORT}`));
-```
-
----
-
-Deploy dette. Når det er oppe, send:
-```
-https://taksering-dashboard.vercel.app/api/debug/bank?year=2026&v=31

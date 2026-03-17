@@ -793,13 +793,4 @@ app.get('/api/debug/pl', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server kører på port ${PORT}`));
-```
 
----
-
-Deploy og send alle fire links om 60 sek:
-```
-https://taksering-dashboard.vercel.app/api/debug/payment-terms?v=41
-https://taksering-dashboard.vercel.app/api/debug/customers-terms?v=41
-https://taksering-dashboard.vercel.app/api/debug/supplier-invoices?v=41
-https://taksering-dashboard.vercel.app/api/debug/open-invoices?v=41

@@ -1,4 +1,4 @@
-// v37
+// v38
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -236,34 +236,11 @@ async function fetchAllEntries(year) {
   return entries.concat(drafts).concat(cashbook);
 }
 
-// v37: Hent konto 5830 bogforte entries via accounting-years endpoint med konto-filter
-// Bruger valueDate (bankdato) hvis den findes - matcher Excel kontoudtog præcist
-async function fetchAccount5830Entries(year) {
-  let all = [];
-  let page = 0;
-  while (true) {
-    const r = await fetch(
-      `${BASE}/accounting-years/${year}/entries?pagesize=1000&skippages=${page}&filter=account.accountNumber$eq:${BANK_ACCOUNT}`,
-      { headers: HEADERS }
-    );
-    if (!r.ok) break;
-    const d = await r.json();
-    const items = (d.collection || []).map(e => ({
-      ...e,
-      date: e.valueDate || e.date,
-    }));
-    all = all.concat(items);
-    if (!d.pagination?.nextPage) break;
-    page++;
-  }
-  return all;
-}
-
-// Til likviditet: bogforte konto 5830 entries + ikke-bogforte drafts
+// Til likviditet: alle bogforte entries + deduplikerede bank-drafts (v33)
 async function fetchBankEntries(year) {
-  const booked = await fetchAccount5830Entries(year);
-  const drafts = await fetchBankDraftEntries(year);
-  return booked.concat(drafts);
+  const entries = await fetchEntriesForYear(year);
+  const drafts  = await fetchBankDraftEntries(year);
+  return entries.concat(drafts);
 }
 
 async function fetchAllInvoices(year) {
@@ -330,8 +307,10 @@ app.get('/api/liquidity', async (req, res) => {
 
     const bankEntries = all
       .filter(e => {
+        const acc    = e.account?.accountNumber || e.accountNumber || 0;
+        const contra = e.contraAccountNumber || 0;
         const dateStr = (e.date || '').split('T')[0];
-        return dateStr <= toStr;
+        return (acc === BANK_ACCOUNT || contra === BANK_ACCOUNT) && dateStr <= toStr;
       })
       .sort((a, b) => {
         const dateDiff = new Date(a.date) - new Date(b.date);
@@ -342,8 +321,7 @@ app.get('/api/liquidity', async (req, res) => {
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      const amt = e.contraAccountNumber != null ? bankAmount(e) : (e.amount || 0);
-      deltaMap[day] = (deltaMap[day] || 0) + amt;
+      deltaMap[day] = (deltaMap[day] || 0) + bankAmount(e);
     });
 
     let running = openingBalance;
@@ -447,6 +425,9 @@ app.get('/api/debug/bank', async (req, res) => {
     const all = await fetchBankEntries(year);
     const bankEntries = all
       .filter(e => {
+        const acc    = e.account?.accountNumber || e.accountNumber || 0;
+        const contra = e.contraAccountNumber || 0;
+        if (!(acc === BANK_ACCOUNT || contra === BANK_ACCOUNT)) return false;
         const ds = (e.date || '').split('T')[0];
         if (from && ds < from) return false;
         if (to   && ds > to)   return false;
@@ -455,12 +436,16 @@ app.get('/api/debug/bank', async (req, res) => {
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const openingBalance = OPENING_BALANCES[year] || 0;
+    const allForYear = all.filter(e => {
+      const acc    = e.account?.accountNumber || e.accountNumber || 0;
+      const contra = e.contraAccountNumber || 0;
+      return acc === BANK_ACCOUNT || contra === BANK_ACCOUNT;
+    });
 
     const deltaMap = {};
-    all.forEach(e => {
+    allForYear.forEach(e => {
       const day = (e.date || '').split('T')[0];
-      const amt = e.contraAccountNumber != null ? bankAmount(e) : (e.amount || 0);
-      deltaMap[day] = (deltaMap[day] || 0) + amt;
+      deltaMap[day] = (deltaMap[day] || 0) + bankAmount(e);
     });
     let running = openingBalance;
     const dailyBalances = Object.keys(deltaMap).sort().map(d => {
@@ -468,45 +453,20 @@ app.get('/api/debug/bank', async (req, res) => {
       return { date: d, balance: Math.round(running * 100) / 100 };
     });
 
-    const entries = bankEntries.map(e => {
-      const amt = e.contraAccountNumber != null ? bankAmount(e) : (e.amount || 0);
-      return {
-        date: (e.date || '').split('T')[0],
-        text: e.text || e.description || '',
-        amount: e.amount,
-        bankAmount: Math.round(amt * 100) / 100,
-        entryType: e.entryTypeNumber,
-        account: e.account?.accountNumber || e.accountNumber || null,
-        contra: e.contraAccountNumber || null,
-        source: e.contraAccountNumber != null ? 'draft' : 'booked',
-        entryNumber: e.entryNumber || null,
-        voucherNumber: e.voucherNumber || null,
-      };
-    });
-
-    res.json({ year, from, to, openingBalance, totalEntries: all.length, filteredEntries: entries.length, dailyBalances, entries });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/api/debug/account5830', async (req, res) => {
-  try {
-    const year = parseInt(req.query.year) || new Date().getFullYear();
-    const r1 = await fetch(
-      `${BASE}/accounting-years/${year}/entries?pagesize=5&filter=account.accountNumber$eq:${BANK_ACCOUNT}`,
-      { headers: HEADERS }
-    );
-    const d1 = await r1.json();
-    const sample = (d1.collection || []).slice(0, 3).map(e => ({
-      date: e.date, valueDate: e.valueDate, amount: e.amount,
-      text: e.text, account: e.account?.accountNumber,
+    const entries = bankEntries.map(e => ({
+      date: (e.date || '').split('T')[0],
+      text: e.text || e.description || '',
+      amount: e.amount,
+      bankAmount: Math.round(bankAmount(e) * 100) / 100,
+      entryType: e.entryTypeNumber,
+      account: e.account?.accountNumber || e.accountNumber || null,
+      contra: e.contraAccountNumber || null,
+      source: e.account ? 'booked' : 'draft',
+      entryNumber: e.entryNumber || null,
+      voucherNumber: e.voucherNumber || null,
     }));
-    res.json({
-      status: r1.status,
-      totalResults: d1.pagination?.results || 0,
-      collectionLength: (d1.collection||[]).length,
-      hasValueDate: (d1.collection||[]).some(e => e.valueDate),
-      sample,
-    });
+
+    res.json({ year, from, to, openingBalance, totalEntries: allForYear.length, filteredEntries: entries.length, dailyBalances, entries });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

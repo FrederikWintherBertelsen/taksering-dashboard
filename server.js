@@ -1,4 +1,4 @@
-// v33
+// v34
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -109,7 +109,6 @@ async function fetchAllJournals() {
   return journals;
 }
 
-// FIX v27: Deduplikér på entryNumber
 async function fetchAllDraftEntries(year) {
   let drafts = [];
   const seen = new Set();
@@ -138,8 +137,7 @@ async function fetchAllDraftEntries(year) {
   return drafts;
 }
 
-// FIX v33: Deduplikér på entryNumber — e-conomic returnerer samme entries
-// fra begge kald (?contraAccountNumber og ?accountNumber)
+// FIX v33: Deduplikér på entryNumber
 async function fetchBankDraftEntries(year) {
   let drafts = [];
   const seen = new Set();
@@ -186,7 +184,6 @@ async function fetchBankDraftEntries(year) {
   return drafts;
 }
 
-// FIX v28: Deduplikér på tværs af cashbooks
 async function fetchAllCashbookEntries(year) {
   let all = [];
   const seen = new Set();
@@ -233,6 +230,7 @@ async function fetchEntriesForYear(year) {
   return all;
 }
 
+// Til P/L
 async function fetchAllEntries(year) {
   const entries  = await fetchEntriesForYear(year);
   const drafts   = await fetchAllDraftEntries(year);
@@ -240,10 +238,35 @@ async function fetchAllEntries(year) {
   return entries.concat(drafts).concat(cashbook);
 }
 
+// v34: Hent konto 5830 entries direkte fra e-conomic accounts endpoint
+// Dette er præcis det samme som e-conomics eget kontoudtog (Excel-filen)
+// amount er allerede korrekt nettobeløb med rigtigt fortegn for konto 5830
+async function fetchAccount5830Entries(year) {
+  let all = [];
+  let page = 0;
+  while (true) {
+    const r = await fetch(
+      `${BASE}/accounts/${BANK_ACCOUNT}/entries?pagesize=1000&skippages=${page}`,
+      { headers: HEADERS }
+    );
+    if (!r.ok) break;
+    const d = await r.json();
+    const items = (d.collection || []).filter(e => {
+      if (!e.date) return false;
+      return new Date(e.date).getFullYear() === year;
+    });
+    all = all.concat(items);
+    if (!d.pagination?.nextPage) break;
+    page++;
+  }
+  return all;
+}
+
+// Til likviditet: bogforte konto 5830 entries + ikke-bogforte drafts
 async function fetchBankEntries(year) {
-  const entries = await fetchEntriesForYear(year);
-  const drafts  = await fetchBankDraftEntries(year);
-  return entries.concat(drafts);
+  const booked = await fetchAccount5830Entries(year);
+  const drafts = await fetchBankDraftEntries(year);
+  return booked.concat(drafts);
 }
 
 async function fetchAllInvoices(year) {
@@ -308,12 +331,12 @@ app.get('/api/liquidity', async (req, res) => {
     const openingBalance = OPENING_BALANCES[year] || 0;
     const all = await fetchBankEntries(year);
 
+    // v34: account entries har amount direkte korrekt (e-conomic kontoudtog)
+    // draft entries bruger bankAmount() for korrekt fortegn
     const bankEntries = all
       .filter(e => {
-        const acc    = e.account?.accountNumber || e.accountNumber || 0;
-        const contra = e.contraAccountNumber || 0;
         const dateStr = (e.date || '').split('T')[0];
-        return (acc === BANK_ACCOUNT || contra === BANK_ACCOUNT) && dateStr <= toStr;
+        return dateStr <= toStr;
       })
       .sort((a, b) => {
         const dateDiff = new Date(a.date) - new Date(b.date);
@@ -324,7 +347,10 @@ app.get('/api/liquidity', async (req, res) => {
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      deltaMap[day] = (deltaMap[day] || 0) + bankAmount(e);
+      // Bogforte entries fra /accounts/5830/entries: amount er korrekt direkte
+      // Draft entries (har contraAccountNumber): brug bankAmount()
+      const amt = e.contraAccountNumber != null ? bankAmount(e) : (e.amount || 0);
+      deltaMap[day] = (deltaMap[day] || 0) + amt;
     });
 
     let running = openingBalance;
@@ -428,9 +454,6 @@ app.get('/api/debug/bank', async (req, res) => {
     const all = await fetchBankEntries(year);
     const bankEntries = all
       .filter(e => {
-        const acc    = e.account?.accountNumber || e.accountNumber || 0;
-        const contra = e.contraAccountNumber || 0;
-        if (!(acc === BANK_ACCOUNT || contra === BANK_ACCOUNT)) return false;
         const ds = (e.date || '').split('T')[0];
         if (from && ds < from) return false;
         if (to   && ds > to)   return false;
@@ -439,16 +462,12 @@ app.get('/api/debug/bank', async (req, res) => {
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const openingBalance = OPENING_BALANCES[year] || 0;
-    const allForYear = all.filter(e => {
-      const acc    = e.account?.accountNumber || e.accountNumber || 0;
-      const contra = e.contraAccountNumber || 0;
-      return acc === BANK_ACCOUNT || contra === BANK_ACCOUNT;
-    });
 
     const deltaMap = {};
-    allForYear.forEach(e => {
+    all.forEach(e => {
       const day = (e.date || '').split('T')[0];
-      deltaMap[day] = (deltaMap[day] || 0) + bankAmount(e);
+      const amt = e.contraAccountNumber != null ? bankAmount(e) : (e.amount || 0);
+      deltaMap[day] = (deltaMap[day] || 0) + amt;
     });
     let running = openingBalance;
     const dailyBalances = Object.keys(deltaMap).sort().map(d => {
@@ -456,20 +475,23 @@ app.get('/api/debug/bank', async (req, res) => {
       return { date: d, balance: Math.round(running * 100) / 100 };
     });
 
-    const entries = bankEntries.map(e => ({
-      date: (e.date || '').split('T')[0],
-      text: e.text || e.description || '',
-      amount: e.amount,
-      bankAmount: Math.round(bankAmount(e) * 100) / 100,
-      entryType: e.entryTypeNumber,
-      account: e.account?.accountNumber || e.accountNumber || null,
-      contra: e.contraAccountNumber || null,
-      source: e.account ? 'booked' : 'draft',
-      entryNumber: e.entryNumber || null,
-      voucherNumber: e.voucherNumber || null,
-    }));
+    const entries = bankEntries.map(e => {
+      const amt = e.contraAccountNumber != null ? bankAmount(e) : (e.amount || 0);
+      return {
+        date: (e.date || '').split('T')[0],
+        text: e.text || e.description || '',
+        amount: e.amount,
+        bankAmount: Math.round(amt * 100) / 100,
+        entryType: e.entryTypeNumber,
+        account: e.account?.accountNumber || e.accountNumber || null,
+        contra: e.contraAccountNumber || null,
+        source: e.contraAccountNumber != null ? 'draft' : 'booked',
+        entryNumber: e.entryNumber || null,
+        voucherNumber: e.voucherNumber || null,
+      };
+    });
 
-    res.json({ year, from, to, openingBalance, totalEntries: allForYear.length, filteredEntries: entries.length, dailyBalances, entries });
+    res.json({ year, from, to, openingBalance, totalEntries: all.length, filteredEntries: entries.length, dailyBalances, entries });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

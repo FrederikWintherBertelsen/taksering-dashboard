@@ -1,4 +1,4 @@
-// v29
+// v30
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -46,9 +46,14 @@ app.post('/api/login', (req, res) => {
 
 // ─── HJÆLPEFUNKTIONER ────────────────────────────────────────────────────────
 
+// FIX v30: Type 2 (kundeindbetaling) med contraAccountNumber=5830 = penge IND på bank
+// Type 2: bank debiteres (stiger) → returner +(amount)
+// Type 4/5 og andre med contra=5830: bank krediteres (falder) → returner -(amount)
 function bankAmount(e) {
-  const acc = e.account?.accountNumber || e.accountNumber || 0;
+  const acc    = e.account?.accountNumber || e.accountNumber || 0;
+  const contra = e.contraAccountNumber || 0;
   if (acc === BANK_ACCOUNT) return e.amount || 0;
+  if (contra === BANK_ACCOUNT && e.entryTypeNumber === 2) return e.amount || 0;
   return -(e.amount || 0);
 }
 
@@ -57,10 +62,8 @@ function bankAmount(e) {
 // Ved ompostering (entryTypeNumber===3) er det contraAccountNumber der er "udgiftskontoen"
 function resolveAccountNumber(e) {
   if (e.account) {
-    // Bogført entry fra fetchEntriesForYear
     return e.account.accountNumber || 0;
   }
-  // Draft entry
   if (e.entryTypeNumber === 3) {
     return e.contraAccountNumber || 0;
   }
@@ -73,19 +76,14 @@ function resolveAccountNumber(e) {
 // Type5 og øvrige drafts er normale → brug amount direkte
 function plAmount(e) {
   if (e.account) {
-    // Bogført entry — amount er allerede i DKK ekskl. moms
     return e.amount || 0;
   }
-  // Draft entry
   const rate = (e.exchangeRate || 100) / 100;
   if (e.entryTypeNumber === 3) {
-    // Ompostering: contraAccountNumber er udgiftskontoen, amount er negativ kredit
-    // Vi vil have den positive udgiftsværdi (samme fortegn som bogførte udgifter)
     const dkk = Math.abs(e.amount || 0) * rate;
     const hasVat = e.contraVatCode || e.vatCode;
     return hasVat ? dkk / 1.25 : dkk;
   }
-  // Type5 og andre: normal retning
   const dkk = (e.amount || 0) * rate;
   const hasVat = e.contraVatCode || e.vatCode;
   return hasVat ? dkk / 1.25 : dkk;
@@ -95,8 +93,6 @@ function inRange(acc, range) {
   return acc >= range.from && acc <= range.to;
 }
 
-// FIX v26: sumCat bruger nu resolveAccountNumber og plAmount konsekvent
-// Returnerer summen med e-conomics fortegn (positiv = debet = omkostning)
 function sumCat(entries, range, month) {
   return entries
     .filter(e => {
@@ -137,7 +133,6 @@ async function fetchAllDraftEntries(year) {
       const items = (d.items || []).filter(e => {
         if (!e.date) return false;
         if (new Date(e.date).getFullYear() !== year) return false;
-        // Deduplikér: brug entryNumber som unik nøgle
         const key = e.entryNumber != null
           ? `${e.journalNumber || journal.number}-${e.entryNumber}`
           : `${e.date}-${e.accountNumber}-${e.amount}-${e.text}`;
@@ -275,11 +270,6 @@ app.get('/api/revenue', async (req, res) => {
     const seen = new Set();
     const months = Array.from({ length: 12 }, (_, i) => {
       const m = i + 1;
-
-      // FIX v26: Alle kategorier negeres korrekt.
-      // e-conomic: indtægter er negative (kredit), omkostninger er positive (debet).
-      // P/L viser: indtægter positive, omkostninger negative.
-      // Derfor: revenue = -(sumCat) og alle cost-kategorier = -(sumCat)
       const revenue    = -(sumCat(entries, PL_MAP.revenue, m) + sumCat(entries, PL_MAP.directPay, m));
       const cogs       = -(sumCat(entries, PL_MAP.cogs, m));
       const salaries   = -(sumCat(entries, PL_MAP.salaries, m));
@@ -517,7 +507,6 @@ app.get('/api/debug/contrafilter', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// FIX v26: Nyt debug endpoint til at inspekcere P/L entries for en given måned
 app.get('/api/debug/pl', async (req, res) => {
   try {
     const year  = parseInt(req.query.year)  || new Date().getFullYear();

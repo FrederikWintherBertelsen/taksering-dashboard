@@ -1,4 +1,4 @@
-// v32
+// v33
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -109,6 +109,7 @@ async function fetchAllJournals() {
   return journals;
 }
 
+// FIX v27: Deduplikér på entryNumber
 async function fetchAllDraftEntries(year) {
   let drafts = [];
   const seen = new Set();
@@ -137,8 +138,11 @@ async function fetchAllDraftEntries(year) {
   return drafts;
 }
 
+// FIX v33: Deduplikér på entryNumber — e-conomic returnerer samme entries
+// fra begge kald (?contraAccountNumber og ?accountNumber)
 async function fetchBankDraftEntries(year) {
   let drafts = [];
+  const seen = new Set();
 
   let url = `${BASE_NEW}/draft-entries?contraAccountNumber=${BANK_ACCOUNT}`;
   while (url) {
@@ -146,7 +150,13 @@ async function fetchBankDraftEntries(year) {
     const d = await r.json();
     const items = (d.items || []).filter(e => {
       if (!e.date) return false;
-      return new Date(e.date).getFullYear() === year;
+      if (new Date(e.date).getFullYear() !== year) return false;
+      const key = e.entryNumber != null
+        ? `${e.entryNumber}`
+        : `${e.date}-${e.accountNumber}-${e.contraAccountNumber}-${e.amount}-${e.text}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
     drafts = drafts.concat(items);
     url = d.cursor
@@ -160,7 +170,13 @@ async function fetchBankDraftEntries(year) {
     const d = await r.json();
     const items = (d.items || []).filter(e => {
       if (!e.date) return false;
-      return new Date(e.date).getFullYear() === year;
+      if (new Date(e.date).getFullYear() !== year) return false;
+      const key = e.entryNumber != null
+        ? `${e.entryNumber}`
+        : `${e.date}-${e.accountNumber}-${e.contraAccountNumber}-${e.amount}-${e.text}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
     drafts = drafts.concat(items);
     url2 = d.cursor
@@ -170,6 +186,7 @@ async function fetchBankDraftEntries(year) {
   return drafts;
 }
 
+// FIX v28: Deduplikér på tværs af cashbooks
 async function fetchAllCashbookEntries(year) {
   let all = [];
   const seen = new Set();

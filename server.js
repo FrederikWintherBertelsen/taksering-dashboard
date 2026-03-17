@@ -1,4 +1,4 @@
-// v34
+// v35
 const express = require('express');
 const fetch   = require('node-fetch');
 const cors    = require('cors');
@@ -137,7 +137,6 @@ async function fetchAllDraftEntries(year) {
   return drafts;
 }
 
-// FIX v33: Deduplikér på entryNumber
 async function fetchBankDraftEntries(year) {
   let drafts = [];
   const seen = new Set();
@@ -230,7 +229,6 @@ async function fetchEntriesForYear(year) {
   return all;
 }
 
-// Til P/L
 async function fetchAllEntries(year) {
   const entries  = await fetchEntriesForYear(year);
   const drafts   = await fetchAllDraftEntries(year);
@@ -238,24 +236,18 @@ async function fetchAllEntries(year) {
   return entries.concat(drafts).concat(cashbook);
 }
 
-// v34: Hent konto 5830 entries direkte fra e-conomic accounts endpoint
-// Dette er præcis det samme som e-conomics eget kontoudtog (Excel-filen)
-// amount er allerede korrekt nettobeløb med rigtigt fortegn for konto 5830
+// v35: Hent konto 5830 entries direkte — præcis som e-conomics eget kontoudtog
 async function fetchAccount5830Entries(year) {
   let all = [];
   let page = 0;
+  const dateFrom = `${year}-01-01`;
+  const dateTo   = `${year}-12-31`;
   while (true) {
-    const r = await fetch(
-      `${BASE}/accounts/${BANK_ACCOUNT}/entries?pagesize=1000&skippages=${page}`,
-      { headers: HEADERS }
-    );
+    const url = `${BASE}/accounts/${BANK_ACCOUNT}/entries?pagesize=1000&skippages=${page}&filter=date$gte:${dateFrom}$and:date$lte:${dateTo}`;
+    const r = await fetch(url, { headers: HEADERS });
     if (!r.ok) break;
     const d = await r.json();
-    const items = (d.collection || []).filter(e => {
-      if (!e.date) return false;
-      return new Date(e.date).getFullYear() === year;
-    });
-    all = all.concat(items);
+    all = all.concat(d.collection || []);
     if (!d.pagination?.nextPage) break;
     page++;
   }
@@ -331,8 +323,6 @@ app.get('/api/liquidity', async (req, res) => {
     const openingBalance = OPENING_BALANCES[year] || 0;
     const all = await fetchBankEntries(year);
 
-    // v34: account entries har amount direkte korrekt (e-conomic kontoudtog)
-    // draft entries bruger bankAmount() for korrekt fortegn
     const bankEntries = all
       .filter(e => {
         const dateStr = (e.date || '').split('T')[0];
@@ -347,8 +337,6 @@ app.get('/api/liquidity', async (req, res) => {
     const deltaMap = {};
     bankEntries.forEach(e => {
       const day = e.date.split('T')[0];
-      // Bogforte entries fra /accounts/5830/entries: amount er korrekt direkte
-      // Draft entries (har contraAccountNumber): brug bankAmount()
       const amt = e.contraAccountNumber != null ? bankAmount(e) : (e.amount || 0);
       deltaMap[day] = (deltaMap[day] || 0) + amt;
     });
